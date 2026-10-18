@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { BookingsModule } from './bookings/bookings.module';
 import { EmailModule } from './email/email.module';
+import { CatalogModule } from './catalog/catalog.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { EmailModule } from './email/email.module';
     MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/booking'),
     BookingsModule,
     EmailModule,
+    CatalogModule,
   ],
   controllers: [AppController],
   providers: [AppService],
