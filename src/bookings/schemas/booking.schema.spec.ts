@@ -56,4 +56,44 @@ describe('BookingSchema', () => {
     const professionalPath = BookingSchema.path('professional');
     expect(professionalPath.isRequired).toBe(true);
   });
+  it('debería declarar slots como array de strings', () => {
+    const slotsPath = BookingSchema.path('slots') as any;
+    expect(slotsPath).toBeDefined();
+    expect(slotsPath.instance).toBe('Array');
+    expect(slotsPath.caster.instance).toBe('String');
+  });
+
+  it('no debería inicializar slots con un array vacío (reservas legacy)', () => {
+    const slotsPath = BookingSchema.path('slots') as any;
+    expect(slotsPath.getDefault()).toBeUndefined();
+  });
+
+  it('debería restringir status a confirmed y cancelled', () => {
+    const statusPath = BookingSchema.path('status') as any;
+    expect(statusPath.enumValues).toEqual(['confirmed', 'cancelled']);
+  });
+
+  it('debería tener client.email opcional y client.phone requerido', () => {
+    const clientSchema = (BookingSchema.path('client') as any).schema;
+    expect(clientSchema.path('email').isRequired).toBeFalsy();
+    expect(clientSchema.path('phone').isRequired).toBe(true);
+  });
+
+  it('debería declarar el índice único parcial por profesional, fecha y slot', () => {
+    const index = BookingSchema.indexes().find(
+      ([fields]) => 'slots' in fields,
+    );
+
+    expect(index).toBeDefined();
+    const [fields, options] = index!;
+    expect(fields).toEqual({ 'professional.id': 1, date: 1, slots: 1 });
+    expect(options).toEqual(
+      expect.objectContaining({
+        unique: true,
+        partialFilterExpression: expect.objectContaining({
+          status: 'confirmed',
+        }),
+      }),
+    );
+  });
 });

@@ -220,6 +220,26 @@ describe('BookingsController', () => {
 
       expect(result).toBeNull();
     });
+
+    it('debería lanzar HttpException 400 cuando el horario ya está ocupado', async () => {
+      mockBookingsService.update.mockRejectedValue(
+        new Error('Ya existe una reserva para Alex García el 2026-03-25 a las 11:00'),
+      );
+
+      await expect(
+        controller.update('507f1f77bcf86cd799439011', { time: '11:00' }),
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    });
+
+    it('debería lanzar HttpException 400 con error de validación', async () => {
+      mockBookingsService.update.mockRejectedValue(
+        new Error('Error de validación: el horario 10:30 no está disponible'),
+      );
+
+      await expect(
+        controller.update('507f1f77bcf86cd799439011', { time: '10:30' }),
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    });
   });
 
   describe('remove', () => {

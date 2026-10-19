@@ -37,9 +37,12 @@ the booking.
       (4+ new non-trivial files).
 - [x] T2 — `AvailabilityService` + `GET /api/availability?date=&serviceId=`
       with duration-based slot blocking; no client data in the response.
-- [ ] T3 — Booking integrity: overlap validation in `create`, `slots` field +
+- [x] T3 — Booking integrity: overlap validation in `create`, `slots` field +
       unique index, email optional, cancelled bookings never block,
       backfill script for existing bookings, fix `checkAvailability`.
+      Includes review follow-ups R3-001 (reject/normalize booking times off
+      the slot grid, e.g. 10:30) and R3-002 (guarantee numeric
+      `service.duration`; backfill coerces strings).
 - [ ] T4 — `whatsapp` module: webhook (GET verify + POST with
       `X-Hub-Signature-256` validation), Cloud API HTTP client,
       `ConversationState` persisted in Mongo.
@@ -93,5 +96,30 @@ RED -> GREEN -> REFACTOR with focused specs.
 - Open item: past dates/hours are not filtered; needs business timezone
   decision (candidate for T5).
 
+- T2 commit: `2a98942` on `feat/whatsApp-bot-02-availability`.
+- Review (slices 01+02, base `feat/whatsApp-bot`, 1084 lines, medium,
+  `slice_budget_reached`): consent granted; lens review-reliability; state
+  approved; acknowledged, lineage `review-8efb4b8289cf1ba5`, authority burned.
+  Reviewed boundary now `2a98942`. Non-blocking follow-ups: R3-001, R3-002
+  (moved into T3); R3-003 (freeze/copy catalog config) and R3-004 (supertest
+  e2e for GET /availability) deferred as suggestions.
+
+- T3 (delegated writer, trigger: 10 non-trivial files) on
+  `feat/whatsApp-bot-03-booking-integrity`. Risk tier: high (schema, unique
+  index, migration script). Partial unique index
+  `{professional.id, date, slots}` with filter
+  `{status:'confirmed', slots:{$exists:true}}` (missing field indexes as null;
+  verified in MongoDB docs via Context7). `create` uses catalog duration,
+  validates start slot and overlap, maps 11000 to 'Ya existe una reserva';
+  `update` re-validates; PATCH now maps business errors to 400; email optional;
+  `checkAvailability` ignores cancelled + overlap. Backfill:
+  `npm run build && npm run backfill:slots [-- --apply]` (dry-run default).
+  RED: 39 failing + compile errors before implementation. GREEN:
+  `npx jest src/bookings` 100/100; `npm test` 167/167; build ok; touched
+  source files eslint-clean (pre-existing spec/gateway lint debt remains).
+  Parent spot check: `npm test` 167/167. ~1190 authored lines (≈660 specs).
+- Behavior change to note: the current frontend can no longer book a 90-min
+  service at 12:00/19:00 (server now returns 400); T6 aligns the frontend.
+
 ## Next step
-Commit T2, run review assessment for the slice, then T3.
+Commit T3, run review assessment, then T4.

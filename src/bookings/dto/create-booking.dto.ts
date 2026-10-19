@@ -2,10 +2,15 @@ export class CreateBookingDto {
   client: {
     name: string;
     id?: string;
-    email: string;
+    /** Optional: WhatsApp bookings only provide a phone number. */
+    email?: string;
     phone: string;
   };
 
+  /**
+   * Only `id` is trusted; name, price and duration are taken from the
+   * catalog when the booking is validated.
+   */
   service: {
     id: string;
     name: string;
@@ -22,4 +27,6 @@ export class CreateBookingDto {
   time: string;
   notes?: string;
   status?: string;
-} 
+}
+
+export type UpdateBookingDto = Partial<CreateBookingDto>;

@@ -5,11 +5,13 @@ import { BookingsController } from './bookings.controller';
 import { BookingsGateway } from './bookings.gateway';
 import { Booking, BookingSchema } from './schemas/booking.schema';
 import { EmailModule } from '../email/email.module';
+import { CatalogModule } from '../catalog/catalog.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Booking.name, schema: BookingSchema }]),
     EmailModule,
+    CatalogModule,
   ],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsGateway],

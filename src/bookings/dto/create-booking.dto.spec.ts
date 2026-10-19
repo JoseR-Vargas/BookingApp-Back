@@ -59,4 +59,15 @@ describe('CreateBookingDto', () => {
     expect(dto.status).toBeUndefined();
     expect(dto.client.id).toBeUndefined();
   });
+  it('debería permitir client.email como campo opcional (reservas por WhatsApp)', () => {
+    const dto = new CreateBookingDto();
+    dto.client = { name: 'Ana', phone: '5491100000000' };
+    dto.service = { id: 'servicio-basico', name: 'Servicio Básico', price: 1200, duration: 60 };
+    dto.professional = { id: 'alex-garcia', name: 'Alex García' };
+    dto.date = '2026-03-25';
+    dto.time = '10:00';
+
+    expect(dto.client.email).toBeUndefined();
+    expect(dto.client.phone).toBe('5491100000000');
+  });
 });
