@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { BookingsModule } from './bookings/bookings.module';
 import { EmailModule } from './email/email.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { AvailabilityModule } from './availability/availability.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CatalogModule } from './catalog/catalog.module';
     BookingsModule,
     EmailModule,
     CatalogModule,
+    AvailabilityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

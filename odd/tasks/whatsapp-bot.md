@@ -35,7 +35,7 @@ the booking.
 - [x] T1 — `catalog` module: professionals, services and weekly schedule ported
       from the frontend config; `GET /api/catalog`. Route: delegated writer
       (4+ new non-trivial files).
-- [ ] T2 — `AvailabilityService` + `GET /api/availability?date=&serviceId=`
+- [x] T2 — `AvailabilityService` + `GET /api/availability?date=&serviceId=`
       with duration-based slot blocking; no client data in the response.
 - [ ] T3 — Booking integrity: overlap validation in `create`, `slots` field +
       unique index, email optional, cancelled bookings never block,
@@ -73,8 +73,25 @@ RED -> GREEN -> REFACTOR with focused specs.
   read-only endpoint). RED: both catalog specs failed with TS2307 before
   implementation. GREEN: `npx jest src/catalog` 10/10; `npm test` 85/85;
   `npm run build` ok; eslint clean. Parent spot check: `npx jest src/catalog`
-  10/10. ~307 authored lines. Commit: pending chain-strategy decision.
+  10/10. Commit: `e1cae47` on `feat/whatsApp-bot-01-catalog` (387 lines incl.
+  this document).
 - Note: `src/app.module.ts` already fails `prettier --check` (pre-existing).
 
+- T1 review assessment (base `feat/whatsApp-bot`, committed-only, untracked
+  `.atl/` excluded): risk medium, `review_due: false`, reason `under_budget`
+  (387 lines). Reviewed boundary stays at `feat/whatsApp-bot`; pending in slice.
+
+- T2 (delegated writer, trigger: 7 new files) on
+  `feat/whatsApp-bot-02-availability`. Risk tier: medium. Pure calculator in
+  `src/availability/availability.calculator.ts` (reused by T3/T5).
+  RED: 3 suites TS2307, then 31/35 failing against a stub. GREEN:
+  `npx jest src/availability` 49/49; build ok; eslint clean. Parent spot check:
+  49/49. `npm test`: 130/130 tests, but suite `src/app.controller.spec.ts`
+  fails to compile due to an uncommitted IDE quick-fix edit (fake `expect`,
+  `node:test` import) not made by the feature work; excluded from the commit.
+  ~680 authored lines (≈380 specs).
+- Open item: past dates/hours are not filtered; needs business timezone
+  decision (candidate for T5).
+
 ## Next step
-Confirm chain strategy, commit T1, then T2.
+Commit T2, run review assessment for the slice, then T3.
