@@ -190,7 +190,7 @@ RED -> GREEN -> REFACTOR with focused specs.
   `BookingsService`) before the module change. GREEN: `npx jest src/whatsapp/bot`
   53/53; wiring spec 2/2 with no WHATSAPP_*/BUSINESS_TIMEZONE env; `npm test`
   310/310; build ok; eslint + prettier clean on touched files. Commit:
-  `COMMIT_T5` (~1310 authored lines, ~720 specs; above the 400 advisory, tests
+  `0c64ecc` (~1310 authored lines, ~720 specs; above the 400 advisory, tests
   kept in the same commit).
 
 ## Next step
