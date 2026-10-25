@@ -163,6 +163,15 @@ RED -> GREEN -> REFACTOR with focused specs.
   Meta webhook (T9 guide), since Vercel's Node helpers may touch the request
   stream before Nest's body parser.
 
+- T3+T4 review (base `2a98942`, 3235 lines, high): consent granted, but the
+  OpenCode reviewer Task transport refused with
+  `immutable_review_transport_unsupported` on gentle-ai 4.0.0 stable. Equivalent
+  upstream issue #5117 is closed; maintainer says fixed in v4.1.1 (installed
+  build predates it), so no report was filed. Candidate declined via the
+  provider-issued decline (`declined_this_candidate`); no review record exists.
+  Action for the owner: upgrade gentle-ai to >= v4.1.1, then re-run the review
+  over base `2a98942`. Review of T3+T4 stays PENDING.
+
 ## Next step
-T5 writer (bot flow) on a new slice branch from `feat/whatsApp-bot-04-whatsapp-module`,
-then T8+T9. T3+T4 review is due over base `2a98942`.
+T5 writer (bot flow) on `feat/whatsApp-bot-05-bot-flow` (from slice 04), then T8+T9.
+T3+T4 review pending the gentle-ai upgrade (see above).
