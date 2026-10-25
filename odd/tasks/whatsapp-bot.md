@@ -46,7 +46,7 @@ the booking.
 - [x] T4 — `whatsapp` module: webhook (GET verify + POST with
       `X-Hub-Signature-256` validation), Cloud API HTTP client,
       `ConversationState` persisted in Mongo.
-- [ ] T5 — Bot flow: service -> day -> time -> professional -> confirm, using
+- [x] T5 — Bot flow: service -> day -> time -> professional -> confirm, using
       interactive list messages and reply buttons; ends in `BookingsService.create`.
 - [ ] T8 — Admin notification: when a booking is created (bot OR web), send
       the admin a WhatsApp utility-template message (`ADMIN_WHATSAPP_NUMBER`,
@@ -172,6 +172,28 @@ RED -> GREEN -> REFACTOR with focused specs.
   Action for the owner: upgrade gentle-ai to >= v4.1.1, then re-run the review
   over base `2a98942`. Review of T3+T4 stays PENDING.
 
+- T5 (delegated writer, trigger: ~7 new files + state machine) on
+  `feat/whatsApp-bot-05-bot-flow`. Risk tier: medium (replaces the logging
+  handler; creates real bookings from untrusted chat input, but through the
+  already-hardened `BookingsService.create`). `src/whatsapp/bot/`: `BotHandler`
+  (service -> day -> time -> professional -> confirm, reply ids
+  `svc:|day:|time:|pro:|confirm:` validated per step; stale replies re-send the
+  current prompt), pure `business-time.ts` (`BUSINESS_TIMEZONE` via
+  `Intl.DateTimeFormat`, past-hour filter closes the T2 open item; unset or
+  invalid timezone => error log + polite "try later" reply, never books blind),
+  `bot.messages.ts` (all Spanish copy). `WhatsappModule` imports
+  `BookingsModule`/`AvailabilityModule`/`CatalogModule` (no forwardRef);
+  `BookingsModule` exports `BookingsService` and does NOT import
+  `WhatsappModule`. `LoggingWhatsappMessageHandler` removed (unused).
+  RED: `business-time`, `bot.handler` suites failed with TS2307 before
+  implementation; the wiring spec failed (handler not `BotHandler`, no
+  `BookingsService`) before the module change. GREEN: `npx jest src/whatsapp/bot`
+  53/53; wiring spec 2/2 with no WHATSAPP_*/BUSINESS_TIMEZONE env; `npm test`
+  310/310; build ok; eslint + prettier clean on touched files. Commit:
+  `COMMIT_T5` (~1310 authored lines, ~720 specs; above the 400 advisory, tests
+  kept in the same commit).
+
 ## Next step
-T5 writer (bot flow) on `feat/whatsApp-bot-05-bot-flow` (from slice 04), then T8+T9.
+T8 + T9 writer (admin notification, Meta setup guide + `.env.example`) on the
+next slice branch. `BUSINESS_TIMEZONE` must be documented in T9.
 T3+T4 review pending the gentle-ai upgrade (see above).

@@ -15,6 +15,6 @@ import { CatalogModule } from '../catalog/catalog.module';
   ],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsGateway],
-  exports: [BookingsGateway],
+  exports: [BookingsService, BookingsGateway],
 })
 export class BookingsModule {}

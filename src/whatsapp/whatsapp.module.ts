@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AvailabilityModule } from '../availability/availability.module';
+import { BookingsModule } from '../bookings/bookings.module';
+import { CatalogModule } from '../catalog/catalog.module';
+import { BotHandler } from './bot/bot.handler';
 import { ConversationStateService } from './conversation-state.service';
 import { ProcessedMessageService } from './processed-message.service';
 import {
@@ -11,20 +15,21 @@ import {
   ProcessedMessageSchema,
 } from './schemas/processed-message.schema';
 import { WhatsappApiModule } from './whatsapp-api.module';
-import {
-  LoggingWhatsappMessageHandler,
-  WhatsappMessageHandler,
-} from './whatsapp-message.handler';
+import { WhatsappMessageHandler } from './whatsapp-message.handler';
 import { WhatsappWebhookController } from './whatsapp-webhook.controller';
 
 /**
  * Inbound side: webhook, idempotency and conversation state. Re-exports the
- * outbound client/config. Replace the WhatsappMessageHandler provider to plug
- * the bot in.
+ * outbound client/config. The BotHandler is the WhatsappMessageHandler. This
+ * module depends on BookingsModule, never the other way round: BookingsModule
+ * may only import WhatsappApiModule (notifications) to avoid a cycle.
  */
 @Module({
   imports: [
     WhatsappApiModule,
+    BookingsModule,
+    AvailabilityModule,
+    CatalogModule,
     MongooseModule.forFeature([
       { name: ProcessedMessage.name, schema: ProcessedMessageSchema },
       { name: ConversationState.name, schema: ConversationStateSchema },
@@ -34,10 +39,8 @@ import { WhatsappWebhookController } from './whatsapp-webhook.controller';
   providers: [
     ProcessedMessageService,
     ConversationStateService,
-    {
-      provide: WhatsappMessageHandler,
-      useClass: LoggingWhatsappMessageHandler,
-    },
+    BotHandler,
+    { provide: WhatsappMessageHandler, useExisting: BotHandler },
   ],
   exports: [WhatsappApiModule, ConversationStateService],
 })
