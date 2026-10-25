@@ -145,5 +145,24 @@ RED -> GREEN -> REFACTOR with focused specs.
   covered by the next review over base `2a98942` after T4 is committed
   (assessment needs `--untracked-scope=exclude` because `.atl/` is untracked).
 
+- T4 (delegated writer, trigger: ~19 new files) on
+  `feat/whatsApp-bot-04-whatsapp-module`. Risk tier: high (public unauthenticated
+  webhook, HMAC signature, secrets handling). `src/whatsapp/`: `WhatsappApiModule`
+  (config + `WhatsappClient`, imports no feature module, so T8/T5 cannot create
+  a cycle) and `WhatsappModule` (webhook, `ProcessedMessage` TTL 48h,
+  `ConversationState` TTL 24h, replaceable `WhatsappMessageHandler` token).
+  `rawBody: true` set in `createApp()` (`api/index.js` already goes through it).
+  Webhook processes messages before answering 200 (Vercel freezes the function
+  after the response); per-message errors are logged, never 5xx.
+  RED: 7 suites failed with TS2307 (no implementation) before coding. GREEN:
+  `npx jest src/whatsapp` 88/88; `npm test` 255/255; `npm run build` ok;
+  eslint clean on `src/whatsapp`. Authored lines: ~700 source + ~1075 specs
+  (naturally above the 400 advisory; tests kept in the same commit). Commit:
+  `59e5593` on `feat/whatsApp-bot-04-whatsapp-module`.
+- Open item: raw-body signature check on Vercel needs a real smoke test with the
+  Meta webhook (T9 guide), since Vercel's Node helpers may touch the request
+  stream before Nest's body parser.
+
 ## Next step
-T4 writer on `feat/whatsApp-bot-04-whatsapp-module`, then T5, then T8+T9.
+T5 writer (bot flow) on a new slice branch from `feat/whatsApp-bot-04-whatsapp-module`,
+then T8+T9. T3+T4 review is due over base `2a98942`.
