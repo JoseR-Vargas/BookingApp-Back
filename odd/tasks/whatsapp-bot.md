@@ -43,11 +43,18 @@ the booking.
       Includes review follow-ups R3-001 (reject/normalize booking times off
       the slot grid, e.g. 10:30) and R3-002 (guarantee numeric
       `service.duration`; backfill coerces strings).
-- [ ] T4 — `whatsapp` module: webhook (GET verify + POST with
+- [x] T4 — `whatsapp` module: webhook (GET verify + POST with
       `X-Hub-Signature-256` validation), Cloud API HTTP client,
       `ConversationState` persisted in Mongo.
 - [ ] T5 — Bot flow: service -> day -> time -> professional -> confirm, using
       interactive list messages and reply buttons; ends in `BookingsService.create`.
+- [ ] T8 — Admin notification: when a booking is created (bot OR web), send
+      the admin a WhatsApp utility-template message (`ADMIN_WHATSAPP_NUMBER`,
+      `WHATSAPP_ADMIN_TEMPLATE_NAME`). Fire-and-forget: a send failure never
+      breaks the booking. No circular module dependency with the bot module.
+- [ ] T9 — Meta setup guide (`docs/whatsapp-setup.md`) + `.env.example`:
+      step-by-step Meta configuration, env var table, webhook URL, exact
+      template text/variables to submit, smoke-test commands.
 - [ ] T6 — Frontend: consume `/catalog` and `/availability` instead of
       hardcoded config and full bookings download (BookingApp_Front repo).
 - [ ] T7 — Protect `GET /api/bookings` (admin only). Must land after or with T6,
@@ -121,5 +128,22 @@ RED -> GREEN -> REFACTOR with focused specs.
 - Behavior change to note: the current frontend can no longer book a 90-min
   service at 12:00/19:00 (server now returns 400); T6 aligns the frontend.
 
+- Scope update (user, this session): Google Calendar is OUT of scope. Goal is
+  "code complete, only Meta credentials missing": T4, T5, T8, T9 are built so
+  the app boots and tests pass with NO WhatsApp env vars; WhatsApp features
+  activate only when the env vars are provided. Unconfigured behavior: outbound
+  sends are skipped with a warn log; webhook POST fails closed (401) without
+  `WHATSAPP_APP_SECRET`; webhook GET verify fails (403) without
+  `WHATSAPP_VERIFY_TOKEN`.
+- Env contract: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`,
+  `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_API_VERSION`
+  (default `v21.0`), `ADMIN_WHATSAPP_NUMBER`, `WHATSAPP_ADMIN_TEMPLATE_NAME`
+  (default `nueva_reserva`), `WHATSAPP_ADMIN_TEMPLATE_LANG` (default `es`),
+  `BUSINESS_TIMEZONE` (IANA; no default: needed to filter past hours, owner
+  must provide it).
+- T3 review (high-risk assessment on slice 03) is still due; it will be
+  covered by the next review over base `2a98942` after T4 is committed
+  (assessment needs `--untracked-scope=exclude` because `.atl/` is untracked).
+
 ## Next step
-Commit T3, run review assessment, then T4.
+T4 writer on `feat/whatsApp-bot-04-whatsapp-module`, then T5, then T8+T9.

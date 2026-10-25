@@ -7,6 +7,7 @@ import { BookingsModule } from './bookings/bookings.module';
 import { EmailModule } from './email/email.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { AvailabilityModule } from './availability/availability.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AvailabilityModule } from './availability/availability.module';
     EmailModule,
     CatalogModule,
     AvailabilityModule,
+    WhatsappModule,
   ],
   controllers: [AppController],
   providers: [AppService],
