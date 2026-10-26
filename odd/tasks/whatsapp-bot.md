@@ -209,6 +209,7 @@ RED -> GREEN -> REFACTOR with focused specs.
   `npx jest src/bookings src/whatsapp` 272/272; `npm test` 339/339; build ok;
   eslint + prettier clean on touched files (`bookings.service.spec.ts` keeps its
   pre-existing eslint debt, count unchanged at 114). ~160 source + ~360 spec lines.
+  Commit: `dd9e71c`.
 
 - T9 (delegated writer, passive documentation; no behavior change). Risk tier:
   low. `docs/whatsapp-setup.md` (English, matching the README; admin template
@@ -222,7 +223,8 @@ RED -> GREEN -> REFACTOR with focused specs.
   one README line links the guide. Check (structural readback, no RED/GREEN
   applicable): 18 headings, all table rows with consistent columns, code fences
   balanced, grep confirms every env var name in the guide and `.env.example`
-  exists in `src/` or the env contract above. ~330 authored lines.
+  exists in `src/` or the env contract above. ~380 authored lines (guide 339).
+  Commit: `9abc415`.
 
 ## Next step
 Owner actions: upgrade gentle-ai to >= v4.1.1 and re-run the review over base
