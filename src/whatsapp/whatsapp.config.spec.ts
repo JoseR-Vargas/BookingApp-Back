@@ -47,6 +47,54 @@ describe('WhatsappConfig', () => {
     expect(config.isSendingConfigured()).toBe(false);
   });
 
+  describe('admin notification settings', () => {
+    it('has no admin number and default template name/lang with an empty env', () => {
+      const config = build({});
+
+      expect(config.adminNumber).toBeUndefined();
+      expect(config.adminTemplateName).toBe('nueva_reserva');
+      expect(config.adminTemplateLang).toBe('es');
+    });
+
+    it('reads the admin variables from the environment', () => {
+      const config = build({
+        ADMIN_WHATSAPP_NUMBER: '5491155551234',
+        WHATSAPP_ADMIN_TEMPLATE_NAME: 'otra_plantilla',
+        WHATSAPP_ADMIN_TEMPLATE_LANG: 'es_AR',
+      });
+
+      expect(config.adminNumber).toBe('5491155551234');
+      expect(config.adminTemplateName).toBe('otra_plantilla');
+      expect(config.adminTemplateLang).toBe('es_AR');
+    });
+
+    it.each([
+      ['+54 9 (11) 5555-1234', '5491155551234'],
+      ['  +34-600-123-456 ', '34600123456'],
+    ])('sanitizes the admin number %p', (raw, expected) => {
+      expect(build({ ADMIN_WHATSAPP_NUMBER: raw }).adminNumber).toBe(expected);
+    });
+
+    it.each(['1234567', '1234567890123456', 'abc12345678', '+54 9 11 call'])(
+      'rejects an invalid admin number %p',
+      (raw) => {
+        expect(
+          build({ ADMIN_WHATSAPP_NUMBER: raw }).adminNumber,
+        ).toBeUndefined();
+      },
+    );
+
+    it('treats blank template settings as defaults', () => {
+      const config = build({
+        WHATSAPP_ADMIN_TEMPLATE_NAME: '  ',
+        WHATSAPP_ADMIN_TEMPLATE_LANG: '',
+      });
+
+      expect(config.adminTemplateName).toBe('nueva_reserva');
+      expect(config.adminTemplateLang).toBe('es');
+    });
+  });
+
   it('needs both the token and the phone number id to send', () => {
     expect(build({ WHATSAPP_ACCESS_TOKEN: 't' }).isSendingConfigured()).toBe(
       false,

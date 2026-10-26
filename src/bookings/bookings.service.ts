@@ -6,6 +6,7 @@ import { CreateBookingDto, UpdateBookingDto } from './dto/create-booking.dto';
 import { BookingsGateway } from './bookings.gateway';
 import { EmailService } from '../email/email.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
 import {
   OccupyingBooking,
   buildDaySlots,
@@ -32,6 +33,12 @@ interface ResolvedSchedule {
 type ExistingBooking = OccupyingBooking & { slots?: string[] };
 
 const CANCELLED = 'cancelled';
+
+/**
+ * Upper bound for the admin notification. The WhatsApp client aborts at 8s;
+ * we stop waiting earlier so the booking response is never held hostage.
+ */
+const ADMIN_NOTIFY_TIMEOUT_MS = 5000;
 
 const conflictMessage = (
   professionalName: string,
@@ -63,6 +70,7 @@ export class BookingsService {
     private bookingsGateway: BookingsGateway,
     private emailService: EmailService,
     private catalogService: CatalogService,
+    private adminNotifier: AdminBookingNotifier,
   ) {}
 
   async create(createBookingDto: CreateBookingDto): Promise<Booking> {
@@ -120,6 +128,8 @@ export class BookingsService {
           );
         }
       }
+
+      await this.notifyAdmin(savedBooking);
 
       return savedBooking;
     } catch (error) {
@@ -224,6 +234,31 @@ export class BookingsService {
       totalRevenue: totalRevenue[0]?.total || 0,
       todayBookings,
     };
+  }
+
+  /**
+   * Best-effort WhatsApp message to the admin. It is awaited (with a bound)
+   * rather than fired and forgotten because serverless platforms freeze
+   * un-awaited work once the response is sent. Never throws.
+   */
+  private async notifyAdmin(booking: Booking): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ADMIN_NOTIFY_TIMEOUT_MS);
+      });
+      await Promise.race([
+        this.adminNotifier.notifyNewBooking(booking),
+        timeout,
+      ]);
+    } catch (notifyError) {
+      console.error(
+        'Error al notificar al administrador por WhatsApp (no crítico):',
+        notifyError,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**

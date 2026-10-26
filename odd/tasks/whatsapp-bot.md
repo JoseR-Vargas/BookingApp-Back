@@ -48,9 +48,10 @@ the booking.
       `ConversationState` persisted in Mongo.
 - [x] T5 — Bot flow: service -> day -> time -> professional -> confirm, using
       interactive list messages and reply buttons; ends in `BookingsService.create`.
-- [ ] T8 — Admin notification: when a booking is created (bot OR web), send
+- [x] T8 — Admin notification: when a booking is created (bot OR web), send
       the admin a WhatsApp utility-template message (`ADMIN_WHATSAPP_NUMBER`,
-      `WHATSAPP_ADMIN_TEMPLATE_NAME`). Fire-and-forget: a send failure never
+      `WHATSAPP_ADMIN_TEMPLATE_NAME`). Best-effort, awaited with a timeout
+      (serverless freezes un-awaited work): a send failure or slowness never
       breaks the booking. No circular module dependency with the bot module.
 - [ ] T9 — Meta setup guide (`docs/whatsapp-setup.md`) + `.env.example`:
       step-by-step Meta configuration, env var table, webhook URL, exact
@@ -192,6 +193,22 @@ RED -> GREEN -> REFACTOR with focused specs.
   310/310; build ok; eslint + prettier clean on touched files. Commit:
   `0c64ecc` (~1310 authored lines, ~720 specs; above the 400 advisory, tests
   kept in the same commit).
+
+- T8 (delegated writer, trigger: cross-module change + notifier, parent-routed)
+  on `feat/whatsApp-bot-06-admin-notify-docs`. Risk tier: medium (best-effort
+  outbound message on the booking path; failures contained). `AdminBookingNotifier`
+  lives in `WhatsappApiModule` (exported); `BookingsModule` imports only
+  `WhatsappApiModule` (no forwardRef, no cycle). Pure
+  `buildAdminTemplateParams` fixes the 6 body params: {{1}} client, {{2}}
+  service, {{3}} professional, {{4}} dd/mm/yyyy, {{5}} HH:MM, {{6}} client phone.
+  `BookingsService.create` awaits the notifier after save/websocket/email,
+  bounded by a 5000 ms `Promise.race` (timer cleared), inside try/catch.
+  RED observed: params and notifier suites TS2307; config spec TS2339 (new
+  getters); module wiring 3 failing (notifier not exported/injected, imports);
+  `bookings.service` 3 failing (notifier not called, timeout case). GREEN:
+  `npx jest src/bookings src/whatsapp` 272/272; `npm test` 339/339; build ok;
+  eslint + prettier clean on touched files (`bookings.service.spec.ts` keeps its
+  pre-existing eslint debt, count unchanged at 114). ~160 source + ~360 spec lines.
 
 ## Next step
 T8 + T9 writer (admin notification, Meta setup guide + `.env.example`) on the

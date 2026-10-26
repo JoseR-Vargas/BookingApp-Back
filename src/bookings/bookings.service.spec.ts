@@ -6,6 +6,7 @@ import { Booking } from './schemas/booking.schema';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { EmailService } from '../email/email.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
 import { Professional, SCHEDULE, Service } from '../catalog/catalog.config';
 
 const PROFESSIONALS: Professional[] = [
@@ -132,6 +133,10 @@ describe('BookingsService', () => {
     sendBookingConfirmation: jest.fn(),
   };
 
+  const mockAdminNotifier = {
+    notifyNewBooking: jest.fn(),
+  };
+
   const mockCatalogService = {
     findService: jest.fn((id: string) => SERVICES.find((s) => s.id === id)),
     findProfessional: jest.fn((id: string) =>
@@ -154,6 +159,7 @@ describe('BookingsService', () => {
         { provide: BookingsGateway, useValue: mockGateway },
         { provide: EmailService, useValue: mockEmailService },
         { provide: CatalogService, useValue: mockCatalogService },
+        { provide: AdminBookingNotifier, useValue: mockAdminNotifier },
       ],
     }).compile();
 
@@ -168,6 +174,7 @@ describe('BookingsService', () => {
     mockSave.mockResolvedValue(mockBooking);
     mockGateway.notifyNewBooking.mockImplementation(() => undefined);
     mockEmailService.sendBookingConfirmation.mockResolvedValue(undefined);
+    mockAdminNotifier.notifyNewBooking.mockResolvedValue(undefined);
   });
 
   it('debería estar definido', () => {
@@ -478,6 +485,84 @@ describe('BookingsService', () => {
       await expect(service.create(mockBookingDto)).rejects.toThrow(
         'Error de conexión',
       );
+    });
+
+    describe('admin notification', () => {
+      afterEach(() => jest.useRealTimers());
+
+      it('notifies the admin once with the saved booking', async () => {
+        await service.create(mockBookingDto);
+
+        expect(mockAdminNotifier.notifyNewBooking).toHaveBeenCalledTimes(1);
+        expect(mockAdminNotifier.notifyNewBooking).toHaveBeenCalledWith(
+          mockBooking,
+        );
+      });
+
+      it('notifies after the websocket event and the confirmation email', async () => {
+        await service.create(mockBookingDto);
+
+        const order = (mock: jest.Mock) => mock.mock.invocationCallOrder[0];
+        expect(order(mockAdminNotifier.notifyNewBooking)).toBeGreaterThan(
+          order(mockGateway.notifyNewBooking),
+        );
+        expect(order(mockAdminNotifier.notifyNewBooking)).toBeGreaterThan(
+          order(mockEmailService.sendBookingConfirmation),
+        );
+      });
+
+      it('still returns the booking when the notifier rejects', async () => {
+        mockAdminNotifier.notifyNewBooking.mockRejectedValue(new Error('boom'));
+
+        await expect(service.create(mockBookingDto)).resolves.toEqual(
+          mockBooking,
+        );
+      });
+
+      it('still returns the booking when the notifier throws synchronously', async () => {
+        mockAdminNotifier.notifyNewBooking.mockImplementation(() => {
+          throw new Error('boom');
+        });
+
+        await expect(service.create(mockBookingDto)).resolves.toEqual(
+          mockBooking,
+        );
+      });
+
+      it('stops waiting for a notifier slower than the timeout', async () => {
+        jest.useFakeTimers();
+        mockAdminNotifier.notifyNewBooking.mockReturnValue(
+          new Promise(() => undefined),
+        );
+        let settled = false;
+
+        const pending = service.create(mockBookingDto).then((booking) => {
+          settled = true;
+          return booking;
+        });
+        await jest.advanceTimersByTimeAsync(4999);
+        expect(settled).toBe(false);
+
+        await jest.advanceTimersByTimeAsync(1);
+        await expect(pending).resolves.toEqual(mockBooking);
+      });
+
+      it('does not leave the timeout timer pending after a fast notification', async () => {
+        jest.useFakeTimers();
+
+        await service.create(mockBookingDto);
+
+        expect(jest.getTimerCount()).toBe(0);
+      });
+
+      it('does not notify when the booking is not saved (conflict)', async () => {
+        mockSave.mockRejectedValue(duplicateKeyError());
+
+        await expect(service.create(mockBookingDto)).rejects.toThrow(
+          'Ya existe una reserva',
+        );
+        expect(mockAdminNotifier.notifyNewBooking).not.toHaveBeenCalled();
+      });
     });
   });
 
