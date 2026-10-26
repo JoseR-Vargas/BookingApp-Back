@@ -53,7 +53,7 @@ the booking.
       `WHATSAPP_ADMIN_TEMPLATE_NAME`). Best-effort, awaited with a timeout
       (serverless freezes un-awaited work): a send failure or slowness never
       breaks the booking. No circular module dependency with the bot module.
-- [ ] T9 — Meta setup guide (`docs/whatsapp-setup.md`) + `.env.example`:
+- [x] T9 — Meta setup guide (`docs/whatsapp-setup.md`) + `.env.example`:
       step-by-step Meta configuration, env var table, webhook URL, exact
       template text/variables to submit, smoke-test commands.
 - [ ] T6 — Frontend: consume `/catalog` and `/availability` instead of
@@ -210,7 +210,25 @@ RED -> GREEN -> REFACTOR with focused specs.
   eslint + prettier clean on touched files (`bookings.service.spec.ts` keeps its
   pre-existing eslint debt, count unchanged at 114). ~160 source + ~360 spec lines.
 
+- T9 (delegated writer, passive documentation; no behavior change). Risk tier:
+  low. `docs/whatsapp-setup.md` (English, matching the README; admin template
+  text in Spanish) covers prerequisites, Meta app/token/secret, webhook order,
+  the `nueva_reserva` template ({{1}} client, {{2}} service, {{3}} professional,
+  {{4}} dd/mm/yyyy, {{5}} HH:MM, {{6}} phone), env var table incl. required
+  `BUSINESS_TIMEZONE`, copy-paste smoke tests (GET verify, signed POST, bot,
+  web booking, logs), the open raw-body 401 risk, test-number limits,
+  24h window/costs, go-live checklist and a troubleshooting table.
+  `.env.example` appended with all WhatsApp/admin/timezone variables (empty);
+  one README line links the guide. Check (structural readback, no RED/GREEN
+  applicable): 18 headings, all table rows with consistent columns, code fences
+  balanced, grep confirms every env var name in the guide and `.env.example`
+  exists in `src/` or the env contract above. ~330 authored lines.
+
 ## Next step
-T8 + T9 writer (admin notification, Meta setup guide + `.env.example`) on the
-next slice branch. `BUSINESS_TIMEZONE` must be documented in T9.
-T3+T4 review pending the gentle-ai upgrade (see above).
+Owner actions: upgrade gentle-ai to >= v4.1.1 and re-run the review over base
+`2a98942` (covers T3+T4 and everything after); get the phone line; follow
+`docs/whatsapp-setup.md` (Meta app, token, webhook, `nueva_reserva` template);
+set `BUSINESS_TIMEZONE` and the other env vars in Vercel, then run the smoke
+tests. Remaining engineering work: T6 (frontend consumes `/catalog` and
+`/availability`) and T7 (protect `GET /api/bookings`), both in the frontend
+repo / after T6.

@@ -25,6 +25,8 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+WhatsApp booking bot setup (Meta, env vars, template): [docs/whatsapp-setup.md](docs/whatsapp-setup.md).
+
 ## Project setup
 
 ```bash
