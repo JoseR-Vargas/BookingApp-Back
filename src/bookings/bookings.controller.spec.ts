@@ -10,12 +10,7 @@ const mockBookingDto: CreateBookingDto = {
     email: 'juan@example.com',
     phone: '1234567890',
   },
-  service: {
-    id: 'corte-cabello',
-    name: 'Corte comun',
-    price: 450,
-    duration: 45,
-  },
+  services: [{ id: 'servicio-basico' }, { id: 'consulta-inicial' }],
   professional: {
     id: 'cesar-viloria',
     name: 'Cesar Viloria',
@@ -275,33 +270,43 @@ describe('BookingsController', () => {
   });
 
   describe('checkAvailability', () => {
+    const body = {
+      date: '2026-03-25',
+      time: '10:00',
+      professionalId: 'cesar-viloria',
+      serviceIds: ['servicio-basico', 'consulta-inicial'],
+    };
+
     it('debería retornar disponible cuando no hay reserva', async () => {
       mockBookingsService.checkAvailability.mockResolvedValue({ available: true });
 
-      const result = await controller.checkAvailability({
-        date: '2026-03-25',
-        time: '10:00',
-        professionalId: 'cesar-viloria',
-      });
+      const result = await controller.checkAvailability(body);
 
       expect(result).toEqual({ available: true });
       expect(mockBookingsService.checkAvailability).toHaveBeenCalledWith(
         '2026-03-25',
         '10:00',
         'cesar-viloria',
+        ['servicio-basico', 'consulta-inicial'],
       );
     });
 
     it('debería retornar no disponible cuando ya hay reserva', async () => {
       mockBookingsService.checkAvailability.mockResolvedValue({ available: false });
 
-      const result = await controller.checkAvailability({
-        date: '2026-03-25',
-        time: '10:00',
-        professionalId: 'cesar-viloria',
-      });
+      const result = await controller.checkAvailability(body);
 
       expect(result).toEqual({ available: false });
+    });
+
+    it('debería lanzar 400 cuando los servicios no son válidos', async () => {
+      mockBookingsService.checkAvailability.mockRejectedValue(
+        new Error('Error de validación: el servicio x no existe'),
+      );
+
+      await expect(controller.checkAvailability(body)).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+      });
     });
   });
 });

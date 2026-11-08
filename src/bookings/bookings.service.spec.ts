@@ -7,28 +7,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { EmailService } from '../email/email.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
-import { Professional, SCHEDULE, Service } from '../catalog/catalog.config';
-
-const PROFESSIONALS: Professional[] = [
-  {
-    id: 'alex-garcia',
-    name: 'Alex García',
-    specialty: 'Especialista',
-    experience: '8 años',
-    rating: 4.9,
-    avatar: '',
-    available: true,
-  },
-  {
-    id: 'maria-lopez',
-    name: 'María López',
-    specialty: 'Consultora',
-    experience: '6 años',
-    rating: 4.8,
-    avatar: '',
-    available: true,
-  },
-];
+import { Service } from '../catalog/catalog.config';
 
 const SERVICES: Service[] = [
   {
@@ -67,12 +46,7 @@ const mockBookingDto: CreateBookingDto = {
     email: 'juan@example.com',
     phone: '1234567890',
   },
-  service: {
-    id: 'servicio-basico',
-    name: 'Nombre enviado por el cliente',
-    price: 1,
-    duration: 1,
-  },
+  services: [{ id: 'servicio-basico' }],
   professional: {
     id: 'alex-garcia',
     name: 'Alex García',
@@ -84,12 +58,16 @@ const mockBookingDto: CreateBookingDto = {
 const mockBooking = {
   _id: '507f1f77bcf86cd799439011',
   ...mockBookingDto,
-  service: {
-    id: 'servicio-basico',
-    name: 'Servicio Básico',
-    price: 1200,
-    duration: 60,
-  },
+  services: [
+    {
+      id: 'servicio-basico',
+      name: 'Servicio Básico',
+      price: 1200,
+      duration: 60,
+    },
+  ],
+  totalPrice: 1200,
+  totalDuration: 60,
   slots: ['10:00'],
   notes: '',
   status: 'confirmed',
@@ -137,17 +115,11 @@ describe('BookingsService', () => {
     notifyNewBooking: jest.fn(),
   };
 
-  const mockCatalogService = {
-    findService: jest.fn((id: string) => SERVICES.find((s) => s.id === id)),
-    findProfessional: jest.fn((id: string) =>
-      PROFESSIONALS.find((p) => p.id === id),
-    ),
-    getCatalog: jest.fn(() => ({
-      professionals: PROFESSIONALS,
-      services: SERVICES,
-      schedule: SCHEDULE,
-    })),
-  };
+  // Real catalog logic over a controlled service list.
+  const mockCatalogService = new CatalogService();
+  jest
+    .spyOn(mockCatalogService, 'findService')
+    .mockImplementation((id) => SERVICES.find((s) => s.id === id));
 
   const savedDoc = () => mockBookingModel.mock.calls[0][0];
 
@@ -195,24 +167,44 @@ describe('BookingsService', () => {
     it('debería guardar los slots calculados y los datos del catálogo', async () => {
       await service.create({
         ...mockBookingDto,
-        service: { id: 'servicio-premium', name: 'x', price: 1, duration: 30 },
+        services: [{ id: 'servicio-premium', name: 'x', price: 1 } as any],
         professional: { id: 'alex-garcia', name: 'Nombre falso' },
         time: '11:00',
       });
 
       const doc = savedDoc();
       expect(doc.slots).toEqual(['11:00', '12:00']);
-      expect(doc.service).toEqual({
-        id: 'servicio-premium',
-        name: 'Servicio Premium',
-        price: 2500,
-        duration: 90,
-      });
+      expect(doc.services).toEqual([
+        {
+          id: 'servicio-premium',
+          name: 'Servicio Premium',
+          price: 2500,
+          duration: 90,
+        },
+      ]);
+      expect(doc.totalPrice).toBe(2500);
+      expect(doc.totalDuration).toBe(90);
       expect(doc.professional).toEqual({
         id: 'alex-garcia',
         name: 'Alex García',
       });
       expect(doc.status).toBe('confirmed');
+    });
+
+    it('debería reservar varios servicios seguidos en slots consecutivos', async () => {
+      await service.create({
+        ...mockBookingDto,
+        services: [{ id: 'servicio-basico' }, { id: 'servicio-premium' }],
+      });
+
+      const doc = savedDoc();
+      expect(doc.services.map((line: { id: string }) => line.id)).toEqual([
+        'servicio-basico',
+        'servicio-premium',
+      ]);
+      expect(doc.totalPrice).toBe(3700);
+      expect(doc.totalDuration).toBe(150);
+      expect(doc.slots).toEqual(['10:00', '11:00', '12:00']);
     });
 
     it('no debería confiar en los slots enviados por el cliente', async () => {
@@ -251,12 +243,27 @@ describe('BookingsService', () => {
       );
     });
 
-    it('debería lanzar error si falta el servicio', async () => {
-      const dtoSinServicio = { ...mockBookingDto, service: null } as any;
+    it.each([null, []])(
+      'debería lanzar error si no hay servicios (%p)',
+      async (services) => {
+        const dtoSinServicios = { ...mockBookingDto, services } as any;
 
-      await expect(service.create(dtoSinServicio)).rejects.toThrow(
-        'Servicio es requerido',
+        await expect(service.create(dtoSinServicios)).rejects.toThrow(
+          'Error de validación: debes seleccionar al menos un servicio',
+        );
+      },
+    );
+
+    it('debería rechazar servicios duplicados', async () => {
+      const dto = {
+        ...mockBookingDto,
+        services: [{ id: 'servicio-basico' }, { id: 'servicio-basico' }],
+      };
+
+      await expect(service.create(dto)).rejects.toThrow(
+        'Error de validación: el servicio servicio-basico está repetido',
       );
+      expect(mockSave).not.toHaveBeenCalled();
     });
 
     it('debería lanzar error si falta el cliente', async () => {
@@ -296,16 +303,11 @@ describe('BookingsService', () => {
     it('debería rechazar un servicio desconocido', async () => {
       const dto = {
         ...mockBookingDto,
-        service: {
-          id: 'corte-cabello',
-          name: 'Corte',
-          price: 450,
-          duration: 45,
-        },
+        services: [{ id: 'servicio-basico' }, { id: 'corte-cabello' }],
       };
 
       await expect(service.create(dto)).rejects.toThrow(
-        'Error de validación: el servicio seleccionado no existe',
+        'Error de validación: el servicio corte-cabello no existe',
       );
       expect(mockSave).not.toHaveBeenCalled();
     });
@@ -321,15 +323,10 @@ describe('BookingsService', () => {
       );
     });
 
-    it('debería rechazar un profesional que no ofrece el servicio', async () => {
+    it('debería rechazar un profesional que no ofrece todos los servicios', async () => {
       const dto = {
         ...mockBookingDto,
-        service: {
-          id: 'servicio-exclusivo',
-          name: 'x',
-          price: 1,
-          duration: 60,
-        },
+        services: [{ id: 'servicio-basico' }, { id: 'servicio-exclusivo' }],
         professional: { id: 'maria-lopez', name: 'María López' },
       };
 
@@ -350,7 +347,7 @@ describe('BookingsService', () => {
     it('debería rechazar un servicio de 90 min que cruza el almuerzo (12:00)', async () => {
       const dto = {
         ...mockBookingDto,
-        service: { id: 'servicio-premium', name: 'x', price: 1, duration: 90 },
+        services: [{ id: 'servicio-premium' }],
         time: '12:00',
       };
 
@@ -362,11 +359,23 @@ describe('BookingsService', () => {
     it('debería rechazar un servicio de 90 min que cruza el cierre (19:00)', async () => {
       const dto = {
         ...mockBookingDto,
-        service: { id: 'servicio-premium', name: 'x', price: 1, duration: 90 },
+        services: [{ id: 'servicio-premium' }],
         time: '19:00',
       };
 
       await expect(service.create(dto)).rejects.toThrow('Error de validación');
+    });
+
+    it('debería rechazar varios servicios cuyo bloque total cruza el almuerzo', async () => {
+      const dto = {
+        ...mockBookingDto,
+        services: [{ id: 'servicio-basico' }, { id: 'servicio-premium' }],
+        time: '11:00',
+      };
+
+      await expect(service.create(dto)).rejects.toThrow(
+        'Error de validación: el horario 11:00 no está disponible para Servicio Básico, Servicio Premium el 2026-03-25',
+      );
     });
 
     it('debería rechazar un domingo', async () => {
@@ -396,9 +405,7 @@ describe('BookingsService', () => {
 
     it('debería rechazar el segundo slot de una reserva existente de 90 min', async () => {
       mockBookingModel.find.mockReturnValue(
-        query([
-          { time: '10:00', service: { duration: 90 }, status: 'confirmed' },
-        ]),
+        query([{ slots: ['10:00', '11:00'] }]),
       );
 
       await expect(
@@ -408,15 +415,11 @@ describe('BookingsService', () => {
       );
     });
 
-    it('debería rechazar si un servicio largo pisa una reserva posterior', async () => {
-      mockBookingModel.find.mockReturnValue(
-        query([
-          { time: '11:00', service: { duration: 60 }, status: 'confirmed' },
-        ]),
-      );
+    it('debería rechazar si el bloque de servicios pisa una reserva posterior', async () => {
+      mockBookingModel.find.mockReturnValue(query([{ slots: ['12:00'] }]));
       const dto = {
         ...mockBookingDto,
-        service: { id: 'servicio-premium', name: 'x', price: 1, duration: 90 },
+        services: [{ id: 'servicio-basico' }, { id: 'servicio-premium' }],
         time: '10:00',
       };
 
@@ -636,12 +639,9 @@ describe('BookingsService', () => {
         expect.objectContaining({
           time: '11:00',
           slots: ['11:00'],
-          service: {
-            id: 'servicio-basico',
-            name: 'Servicio Básico',
-            price: 1200,
-            duration: 60,
-          },
+          services: mockBooking.services,
+          totalPrice: 1200,
+          totalDuration: 60,
         }),
       );
       expect(mockBookingModel.findByIdAndUpdate.mock.calls[0][2]).toEqual({
@@ -659,9 +659,7 @@ describe('BookingsService', () => {
 
     it('debería rechazar un cambio de hora que se superpone con otra reserva', async () => {
       mockBookingModel.find.mockReturnValue(
-        query([
-          { time: '11:00', service: { duration: 90 }, status: 'confirmed' },
-        ]),
+        query([{ slots: ['11:00', '12:00'] }]),
       );
 
       await expect(service.update(id, { time: '12:00' })).rejects.toThrow(
@@ -682,11 +680,7 @@ describe('BookingsService', () => {
       mockBookingModel.findById.mockReturnValue(
         query({ ...mockBooking, status: 'cancelled' }),
       );
-      mockBookingModel.find.mockReturnValue(
-        query([
-          { time: '10:00', service: { duration: 60 }, status: 'confirmed' },
-        ]),
-      );
+      mockBookingModel.find.mockReturnValue(query([{ slots: ['10:00'] }]));
 
       await expect(service.update(id, { status: 'confirmed' })).rejects.toThrow(
         'Ya existe una reserva',
@@ -700,16 +694,43 @@ describe('BookingsService', () => {
       expect(updatePayload()).toEqual({ notes: 'Llego 5 min tarde' });
     });
 
-    it('no debería aceptar slots ni servicio del cliente sin re-validar', async () => {
+    it('no debería aceptar slots, servicios ni totales del cliente sin re-validar', async () => {
       await service.update(id, {
         ...mockBookingDto,
-        service: { ...mockBookingDto.service, price: 1 },
         slots: ['18:00'],
+        totalPrice: 1,
+        totalDuration: 1,
       } as any);
 
       const payload = updatePayload();
       expect(payload.slots).toBeUndefined();
-      expect(payload.service).toBeUndefined();
+      expect(payload.services).toBeUndefined();
+      expect(payload.totalPrice).toBeUndefined();
+      expect(payload.totalDuration).toBeUndefined();
+    });
+
+    it('debería re-resolver los servicios y slots al cambiar la lista de servicios', async () => {
+      await service.update(id, {
+        services: [{ id: 'servicio-basico' }, { id: 'servicio-premium' }],
+      });
+
+      expect(updatePayload()).toEqual(
+        expect.objectContaining({
+          slots: ['10:00', '11:00', '12:00'],
+          totalPrice: 3700,
+          totalDuration: 150,
+        }),
+      );
+      expect(updatePayload().services).toHaveLength(2);
+    });
+
+    it('debería rechazar servicios duplicados al actualizar', async () => {
+      await expect(
+        service.update(id, {
+          services: [{ id: 'servicio-basico' }, { id: 'servicio-basico' }],
+        }),
+      ).rejects.toThrow('Error de validación');
+      expect(mockBookingModel.findByIdAndUpdate).not.toHaveBeenCalled();
     });
 
     it('debería mapear el error 11000 al actualizar', async () => {
@@ -752,12 +773,11 @@ describe('BookingsService', () => {
   });
 
   describe('checkAvailability', () => {
+    const check = (time: string, serviceIds: string[]) =>
+      service.checkAvailability('2026-03-25', time, 'alex-garcia', serviceIds);
+
     it('debería retornar available: true cuando no hay reserva', async () => {
-      const result = await service.checkAvailability(
-        '2026-03-25',
-        '10:00',
-        'alex-garcia',
-      );
+      const result = await check('10:00', ['servicio-basico']);
 
       expect(result).toEqual({ available: true });
       expect(mockBookingModel.find).toHaveBeenCalledWith(
@@ -773,45 +793,56 @@ describe('BookingsService', () => {
     it('debería retornar available: false cuando ya hay reserva', async () => {
       mockBookingModel.find.mockReturnValue(query([mockBooking]));
 
-      const result = await service.checkAvailability(
-        '2026-03-25',
-        '10:00',
-        'alex-garcia',
-      );
-
-      expect(result).toEqual({ available: false });
+      expect(await check('10:00', ['servicio-basico'])).toEqual({
+        available: false,
+      });
     });
 
     it('debería detectar la superposición con una reserva de 90 min', async () => {
       mockBookingModel.find.mockReturnValue(
-        query([
-          { time: '10:00', service: { duration: 90 }, status: 'confirmed' },
-        ]),
+        query([{ slots: ['10:00', '11:00'] }]),
       );
 
+      expect(await check('11:00', ['servicio-basico'])).toEqual({
+        available: false,
+      });
+    });
+
+    it('debería exigir libre toda la ventana de varios servicios', async () => {
+      mockBookingModel.find.mockReturnValue(query([{ slots: ['12:00'] }]));
+
+      expect(
+        await check('10:00', ['servicio-basico', 'servicio-premium']),
+      ).toEqual({ available: false });
+      expect(await check('10:00', ['servicio-basico'])).toEqual({
+        available: true,
+      });
+    });
+
+    it('debería retornar available: false si la ventana no entra en el horario', async () => {
+      expect(
+        await check('11:00', ['servicio-basico', 'servicio-premium']),
+      ).toEqual({ available: false });
+    });
+
+    it('debería retornar available: false si el profesional no ofrece todos los servicios', async () => {
       const result = await service.checkAvailability(
         '2026-03-25',
-        '11:00',
-        'alex-garcia',
+        '10:00',
+        'maria-lopez',
+        ['servicio-basico', 'servicio-exclusivo'],
       );
 
       expect(result).toEqual({ available: false });
     });
 
-    it('debería ignorar reservas canceladas', async () => {
-      mockBookingModel.find.mockReturnValue(
-        query([
-          { time: '10:00', service: { duration: 60 }, status: 'cancelled' },
-        ]),
+    it('debería rechazar servicios inválidos con error de validación', async () => {
+      await expect(check('10:00', [])).rejects.toThrow(
+        'Error de validación: debes seleccionar al menos un servicio',
       );
-
-      const result = await service.checkAvailability(
-        '2026-03-25',
-        '10:00',
-        'alex-garcia',
+      await expect(check('10:00', ['nope'])).rejects.toThrow(
+        'Error de validación: el servicio nope no existe',
       );
-
-      expect(result).toEqual({ available: true });
     });
   });
 
@@ -863,7 +894,7 @@ describe('BookingsService', () => {
       expect(todayCall[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
-    it('debería usar $sum: service.price en la agregación', async () => {
+    it('debería usar $sum: totalPrice en la agregación', async () => {
       mockBookingModel.countDocuments.mockResolvedValue(0);
       mockBookingModel.aggregate.mockResolvedValue([
         { _id: null, total: 3000 },
@@ -875,7 +906,7 @@ describe('BookingsService', () => {
         {
           $group: {
             _id: null,
-            total: { $sum: '$service.price' },
+            total: { $sum: '$totalPrice' },
           },
         },
       ]);

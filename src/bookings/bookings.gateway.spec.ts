@@ -82,7 +82,9 @@ describe('BookingsGateway', () => {
       const fullBooking = {
         _id: '507f1f77bcf86cd799439011',
         client: { name: 'Juan', email: 'juan@test.com', phone: '123' },
-        service: { id: 'corte-cabello', name: 'Corte comun', price: 450, duration: 45 },
+        services: [{ id: 'corte-cabello', name: 'Corte comun', price: 450, duration: 45 }],
+        totalPrice: 450,
+        totalDuration: 45,
         professional: { id: 'cesar-viloria', name: 'Cesar Viloria' },
         date: '2026-03-25',
         time: '10:00',

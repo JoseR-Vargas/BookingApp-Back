@@ -40,14 +40,25 @@ export class BookingsController {
   }
 
   @Post('availability')
-  checkAvailability(
-    @Body() body: { date: string; time: string; professionalId: string },
+  async checkAvailability(
+    @Body()
+    body: {
+      date: string;
+      time: string;
+      professionalId: string;
+      serviceIds: string[];
+    },
   ) {
-    return this.bookingsService.checkAvailability(
-      body.date,
-      body.time,
-      body.professionalId,
-    );
+    try {
+      return await this.bookingsService.checkAvailability(
+        body.date,
+        body.time,
+        body.professionalId,
+        body.serviceIds,
+      );
+    } catch (error) {
+      throw this.toHttpException(error, 'Error al consultar disponibilidad:');
+    }
   }
 
   @Get()

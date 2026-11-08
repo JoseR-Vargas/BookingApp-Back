@@ -71,7 +71,7 @@ describe('WhatsappApiModule (no WHATSAPP_* env vars)', () => {
     await expect(
       notifier.notifyNewBooking({
         client: { name: 'Ana', phone: '1234567890' },
-        service: { name: 'Servicio' },
+        services: [{ name: 'Servicio' }],
         professional: { name: 'Alex' },
         date: '2026-03-25',
         time: '10:00',

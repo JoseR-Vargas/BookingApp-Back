@@ -4,6 +4,13 @@ import { Document } from 'mongoose';
 export const BOOKING_STATUSES = ['confirmed', 'cancelled'] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
+export interface BookedService {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+}
+
 @Schema({ timestamps: true })
 export class Booking extends Document {
   @Prop({
@@ -23,21 +30,27 @@ export class Booking extends Document {
     phone: string;
   };
 
+  /** Services performed back-to-back, in order, as priced when booked. */
   @Prop({
-    type: {
-      id: { type: String, required: true },
-      name: { type: String, required: true },
-      price: { type: Number, required: true },
-      duration: { type: Number, required: true },
-    },
+    type: [
+      {
+        _id: false,
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        price: { type: Number, required: true },
+        duration: { type: Number, required: true },
+      },
+    ],
     required: true,
   })
-  service: {
-    id: string;
-    name: string;
-    price: number;
-    duration: number;
-  };
+  services: BookedService[];
+
+  @Prop({ required: true })
+  totalPrice: number;
+
+  /** Sum of the service durations, in minutes. */
+  @Prop({ required: true })
+  totalDuration: number;
 
   @Prop({
     type: {
@@ -57,13 +70,9 @@ export class Booking extends Document {
   @Prop({ required: true })
   time: string;
 
-  /**
-   * Hourly slot labels ('HH:00') occupied by the booking. Always computed
-   * server-side. No default so legacy documents stay without the field
-   * (an empty array would be indexed and collide in the unique index).
-   */
-  @Prop({ type: [String], default: undefined })
-  slots?: string[];
+  /** Slot start times ('HH:MM') the booking occupies. Computed server-side. */
+  @Prop({ type: [String], required: true })
+  slots: string[];
 
   @Prop({ default: '' })
   notes: string;
@@ -77,8 +86,7 @@ export const BookingSchema = SchemaFactory.createForClass(Booking);
 /**
  * One confirmed booking per professional, date and slot. Being multikey on
  * `slots`, uniqueness applies to each array element across documents.
- * Cancelled bookings and legacy documents without `slots` are not indexed,
- * so they never block (run `npm run backfill:slots` to cover legacy data).
+ * Cancelled bookings are not indexed, so they never block.
  */
 BookingSchema.index(
   { 'professional.id': 1, date: 1, slots: 1 },

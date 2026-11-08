@@ -6,7 +6,7 @@ import { WhatsappConfig } from './whatsapp.config';
 
 const booking: AdminNotifiableBooking = {
   client: { name: 'Juan Pérez', phone: '1234567890' },
-  service: { name: 'Servicio Básico' },
+  services: [{ name: 'Servicio Básico' }],
   professional: { name: 'Alex García' },
   date: '2026-03-25',
   time: '10:00',

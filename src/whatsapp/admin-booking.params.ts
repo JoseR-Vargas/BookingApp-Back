@@ -1,7 +1,7 @@
 /** Minimal booking shape the admin notification needs. */
 export interface AdminNotifiableBooking {
   client: { name: string; phone: string };
-  service: { name: string };
+  services: { name: string }[];
   professional: { name: string };
   date: string;
   time: string;
@@ -15,13 +15,16 @@ export function formatAdminDate(isoDate: string): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : isoDate;
 }
 
+const servicesLabel = (services: { name: string }[] | undefined): string =>
+  (services ?? []).map((service) => service.name).join(', ');
+
 const nonEmpty = (value: string | undefined): string =>
   value?.trim() ? value.trim() : FALLBACK;
 
 /**
  * Body params of the admin utility template, in the fixed order the approved
  * template uses (docs/whatsapp-setup.md must match):
- * {{1}} client name, {{2}} service, {{3}} professional, {{4}} date dd/mm/yyyy,
+ * {{1}} client name, {{2}} services joined with ", ", {{3}} professional, {{4}} date dd/mm/yyyy,
  * {{5}} time HH:MM, {{6}} client phone.
  */
 export function buildAdminTemplateParams(
@@ -29,7 +32,7 @@ export function buildAdminTemplateParams(
 ): string[] {
   return [
     nonEmpty(booking.client?.name),
-    nonEmpty(booking.service?.name),
+    nonEmpty(servicesLabel(booking.services)),
     nonEmpty(booking.professional?.name),
     nonEmpty(formatAdminDate(booking.date)),
     nonEmpty(booking.time),

@@ -8,15 +8,11 @@ export class CreateBookingDto {
   };
 
   /**
-   * Only `id` is trusted; name, price and duration are taken from the
-   * catalog when the booking is validated.
+   * Services performed back-to-back by the professional. Only `id` is
+   * trusted; name, price and duration are taken from the catalog when the
+   * booking is validated.
    */
-  service: {
-    id: string;
-    name: string;
-    price: number;
-    duration: number;
-  };
+  services: { id: string }[];
 
   professional: {
     id: string;

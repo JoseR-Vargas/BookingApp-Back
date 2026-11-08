@@ -59,13 +59,11 @@ describe('AvailabilityService', () => {
     bookings = [
       {
         professional: { id: 'alex-garcia' },
-        service: { duration: 90 },
-        time: '10:00',
+        slots: ['10:00', '11:00'],
       },
       {
         professional: { id: 'maria-lopez' },
-        service: { duration: 60 },
-        time: '18:00',
+        slots: ['18:00'],
       },
     ];
 

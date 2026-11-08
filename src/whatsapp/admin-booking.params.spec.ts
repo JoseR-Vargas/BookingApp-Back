@@ -6,7 +6,7 @@ import {
 
 const booking: AdminNotifiableBooking = {
   client: { name: 'Juan Pérez', phone: '+54 9 11 5555-1234' },
-  service: { name: 'Servicio Premium' },
+  services: [{ name: 'Servicio Premium' }],
   professional: { name: 'Alex García' },
   date: '2026-03-25',
   time: '10:00',
@@ -33,6 +33,25 @@ describe('buildAdminTemplateParams', () => {
       '10:00',
       '+54 9 11 5555-1234',
     ]);
+  });
+
+  it('joins every service name with ", " in the service param', () => {
+    const params = buildAdminTemplateParams({
+      ...booking,
+      services: [
+        { name: 'Consulta Inicial' },
+        { name: 'Servicio Básico' },
+        { name: 'Servicio Premium' },
+      ],
+    });
+
+    expect(params[1]).toBe(
+      'Consulta Inicial, Servicio Básico, Servicio Premium',
+    );
+  });
+
+  it('falls back to "-" when the booking has no services', () => {
+    expect(buildAdminTemplateParams({ ...booking, services: [] })[1]).toBe('-');
   });
 
   it('never returns an empty param (Meta rejects empty values)', () => {

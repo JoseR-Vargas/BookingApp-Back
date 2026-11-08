@@ -367,7 +367,6 @@ export class BotHandler extends WhatsappMessageHandler {
     data: BotData,
     message: InboundMessage,
   ): Promise<void> {
-    const service = this.catalog.findService(data.serviceId!)!;
     const professional = this.catalog.findProfessional(data.professionalId!)!;
     try {
       await this.bookings.create({
@@ -375,12 +374,7 @@ export class BotHandler extends WhatsappMessageHandler {
           name: message.profileName?.trim() || DEFAULT_CLIENT_NAME,
           phone: ctx.phone,
         },
-        service: {
-          id: service.id,
-          name: service.name,
-          price: service.price,
-          duration: service.duration,
-        },
+        services: [{ id: data.serviceId! }],
         professional: { id: professional.id, name: professional.name },
         date: data.date!,
         time: data.time!,

@@ -1,36 +1,60 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Booking } from './schemas/booking.schema';
+import { BookedService, Booking } from './schemas/booking.schema';
 import { CreateBookingDto, UpdateBookingDto } from './dto/create-booking.dto';
 import { BookingsGateway } from './bookings.gateway';
 import { EmailService } from '../email/email.service';
+import { Service } from '../catalog/catalog.config';
 import { CatalogService } from '../catalog/catalog.service';
+import {
+  ServiceSelection,
+  ServiceSelectionError,
+} from '../catalog/service-selection';
 import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
 import {
   OccupyingBooking,
   buildDaySlots,
   dayOfWeekFromIsoDate,
-  freeStartTimes,
   occupiedSlots,
   slotsRequired,
+  windowSlots,
 } from '../availability/availability.calculator';
 
 interface ScheduleRequest {
-  service?: { id?: string } | null;
-  professional?: { id?: string } | null;
-  date?: string;
-  time?: string;
+  serviceIds: string[];
+  professionalId: string;
+  date: string;
+  time: string;
 }
 
 /** Booking fields derived from the catalog; never trusted from the client. */
 interface ResolvedSchedule {
-  service: { id: string; name: string; price: number; duration: number };
+  services: BookedService[];
+  totalPrice: number;
+  totalDuration: number;
   professional: { id: string; name: string };
   slots: string[];
 }
 
-type ExistingBooking = OccupyingBooking & { slots?: string[] };
+/** Fields computed by the server; a client can never set them directly. */
+const DERIVED_FIELDS = [
+  'services',
+  'professional',
+  'slots',
+  'totalPrice',
+  'totalDuration',
+] as const;
+
+const serviceIdsOf = (services: { id?: string }[] | null | undefined) =>
+  Array.isArray(services) ? services.map((service) => service?.id ?? '') : [];
+
+const toBookedService = (service: Service): BookedService => ({
+  id: service.id,
+  name: service.name,
+  price: service.price,
+  duration: service.duration,
+});
 
 const CANCELLED = 'cancelled';
 
@@ -51,8 +75,11 @@ const isDuplicateKeyError = (error: unknown): boolean =>
   error !== null &&
   (error as { code?: unknown }).code === 11000;
 
-/** Maps Mongoose validation errors to the 'Error de validación' family. */
+/** Maps validation errors to the 'Error de validación' family. */
 function toBusinessError(error: unknown): unknown {
+  if (error instanceof ServiceSelectionError) {
+    return new Error(`Error de validación: ${error.message}`);
+  }
   if (error instanceof Error && error.name === 'ValidationError') {
     const errors = (error as Error & { errors?: Record<string, Error> }).errors;
     const messages = Object.values(errors ?? {})
@@ -83,16 +110,18 @@ export class BookingsService {
       if (!createBookingDto.professional?.id) {
         throw new Error('Profesional es requerido');
       }
-      if (!createBookingDto.service?.id) {
-        throw new Error('Servicio es requerido');
-      }
       if (!client?.name || !client?.phone) {
         throw new Error('Datos del cliente son requeridos');
       }
 
       // NO validamos duplicados por cliente porque un cliente puede reservar
       // con diferentes profesionales en el mismo horario.
-      const resolved = await this.resolveSchedule(createBookingDto);
+      const resolved = await this.resolveSchedule({
+        serviceIds: serviceIdsOf(createBookingDto.services),
+        professionalId: createBookingDto.professional.id,
+        date,
+        time,
+      });
 
       const createdBooking = new this.bookingModel({
         client,
@@ -155,15 +184,20 @@ export class BookingsService {
         return null;
       }
 
-      // Service, professional and slots only change through catalog resolution.
+      // Services, professional, slots and totals only change through catalog
+      // resolution.
       const changes: Record<string, unknown> = { ...updateBookingDto };
-      delete changes.service;
-      delete changes.professional;
-      delete changes.slots;
+      for (const field of DERIVED_FIELDS) {
+        delete changes[field];
+      }
 
+      const currentServiceIds = serviceIdsOf(current.services);
       const target = {
-        service: updateBookingDto.service ?? current.service,
-        professional: updateBookingDto.professional ?? current.professional,
+        serviceIds: updateBookingDto.services
+          ? serviceIdsOf(updateBookingDto.services)
+          : currentServiceIds,
+        professionalId:
+          updateBookingDto.professional?.id ?? current.professional?.id,
         date: updateBookingDto.date ?? current.date,
         time: updateBookingDto.time ?? current.time,
         status: updateBookingDto.status ?? current.status,
@@ -171,8 +205,8 @@ export class BookingsService {
       const scheduleChanged =
         target.date !== current.date ||
         target.time !== current.time ||
-        target.service?.id !== current.service?.id ||
-        target.professional?.id !== current.professional?.id;
+        target.serviceIds.join() !== currentServiceIds.join() ||
+        target.professionalId !== current.professional?.id;
       const reactivated =
         current.status === CANCELLED && target.status !== CANCELLED;
 
@@ -199,13 +233,29 @@ export class BookingsService {
     return this.bookingModel.findByIdAndDelete(id).exec();
   }
 
+  /** Whether the professional can perform all services starting at `time`. */
   async checkAvailability(
     date: string,
     time: string,
     professionalId: string,
+    serviceIds: string[],
   ): Promise<{ available: boolean }> {
-    const occupied = await this.occupiedSlotsFor(date, professionalId);
-    return { available: !occupied.has(time) };
+    try {
+      const selection = this.catalogService.resolveServices(
+        Array.isArray(serviceIds) ? serviceIds : [],
+      );
+      const slots = this.windowSlotsFor(date, time, selection.totalDuration);
+      const offersAll = selection.professionals.some(
+        (professional) => professional.id === professionalId,
+      );
+      if (!slots || !offersAll) {
+        return { available: false };
+      }
+      const occupied = await this.occupiedSlotsFor(date, professionalId);
+      return { available: slots.every((slot) => !occupied.has(slot)) };
+    } catch (error) {
+      throw toBusinessError(error);
+    }
   }
 
   async getStatistics(): Promise<{
@@ -219,7 +269,7 @@ export class BookingsService {
       {
         $group: {
           _id: null,
-          total: { $sum: '$service.price' },
+          total: { $sum: '$totalPrice' },
         },
       },
     ]);
@@ -262,80 +312,107 @@ export class BookingsService {
   }
 
   /**
-   * Validates service, professional and start time against the catalog and
+   * Validates services, professional and start time against the catalog and
    * existing bookings, returning the catalog values and occupied slots.
    */
   private async resolveSchedule(
     request: ScheduleRequest,
     excludeId?: string,
   ): Promise<ResolvedSchedule> {
-    const service = this.catalogService.findService(request.service?.id ?? '');
-    if (!service) {
+    const selection = this.catalogService.resolveServices(request.serviceIds);
+    const professional = this.resolveProfessional(
+      request.professionalId,
+      selection,
+    );
+    const slots = this.resolveWindow(request, selection);
+
+    const occupied = await this.occupiedSlotsFor(
+      request.date,
+      professional.id,
+      excludeId,
+    );
+    if (slots.some((slot) => occupied.has(slot))) {
       throw new Error(
-        'Error de validación: el servicio seleccionado no existe',
+        conflictMessage(professional.name, request.date, request.time),
       );
     }
+
+    return {
+      services: selection.services.map(toBookedService),
+      totalPrice: selection.totalPrice,
+      totalDuration: selection.totalDuration,
+      professional: { id: professional.id, name: professional.name },
+      slots,
+    };
+  }
+
+  /** The professional must exist and offer every selected service. */
+  private resolveProfessional(
+    professionalId: string | undefined,
+    selection: ServiceSelection,
+  ) {
     const professional = this.catalogService.findProfessional(
-      request.professional?.id ?? '',
+      professionalId ?? '',
     );
     if (!professional) {
       throw new Error(
         'Error de validación: el profesional seleccionado no existe',
       );
     }
-    if (!service.professionals.includes(professional.id)) {
-      throw new Error(
-        `Error de validación: ${professional.name} no ofrece ${service.name}`,
-      );
-    }
-
-    const date = request.date ?? '';
-    const time = request.time ?? '';
-    const dayOfWeek = dayOfWeekFromIsoDate(date);
-    if (dayOfWeek === null) {
-      throw new Error(`Error de validación: la fecha ${date} no es válida`);
-    }
-
-    // Valid starts: on the slot grid, with every required slot contiguous
-    // (no crossing lunch or closing time; closed days have no slots).
-    const { schedule } = this.catalogService.getCatalog();
-    const interval = schedule.slotIntervalMinutes;
-    const daySlots = buildDaySlots(dayOfWeek, schedule);
-    const required = slotsRequired(service.duration, interval);
-    const validStarts = freeStartTimes(daySlots, new Set(), required, interval);
-    if (!validStarts.includes(time)) {
-      throw new Error(
-        `Error de validación: el horario ${time} no está disponible para ${service.name} el ${date}`,
-      );
-    }
-    const start = daySlots.indexOf(time);
-    const slots = daySlots.slice(start, start + required);
-
-    const occupied = await this.occupiedSlotsFor(
-      date,
-      professional.id,
-      excludeId,
+    const notOffered = selection.services.filter(
+      (service) => !service.professionals.includes(professional.id),
     );
-    if (slots.some((slot) => occupied.has(slot))) {
-      throw new Error(conflictMessage(professional.name, date, time));
+    if (notOffered.length > 0) {
+      throw new Error(
+        `Error de validación: ${professional.name} no ofrece ${notOffered
+          .map((service) => service.name)
+          .join(', ')}`,
+      );
     }
-
-    return {
-      service: {
-        id: service.id,
-        name: service.name,
-        price: service.price,
-        duration: service.duration,
-      },
-      professional: { id: professional.id, name: professional.name },
-      slots,
-    };
+    return professional;
   }
 
-  /**
-   * Slots blocked by non-cancelled bookings. Legacy bookings without `slots`
-   * are covered by computing them from their time and stored duration.
-   */
+  /** Slots of the whole service block, which must fit in the day schedule. */
+  private resolveWindow(
+    { date, time }: ScheduleRequest,
+    selection: ServiceSelection,
+  ): string[] {
+    if (dayOfWeekFromIsoDate(date) === null) {
+      throw new Error(`Error de validación: la fecha ${date} no es válida`);
+    }
+    const slots = this.windowSlotsFor(date, time, selection.totalDuration);
+    if (!slots) {
+      const names = selection.services
+        .map((service) => service.name)
+        .join(', ');
+      throw new Error(
+        `Error de validación: el horario ${time} no está disponible para ${names} el ${date}`,
+      );
+    }
+    return slots;
+  }
+
+  /** Consecutive slots a block of `totalDuration` minutes needs, or null. */
+  private windowSlotsFor(
+    date: string,
+    time: string,
+    totalDuration: number,
+  ): string[] | null {
+    const dayOfWeek = dayOfWeekFromIsoDate(date);
+    if (dayOfWeek === null) {
+      return null;
+    }
+    const { schedule } = this.catalogService.getCatalog();
+    const interval = schedule.slotIntervalMinutes;
+    return windowSlots(
+      buildDaySlots(dayOfWeek, schedule),
+      time,
+      slotsRequired(totalDuration, interval),
+      interval,
+    );
+  }
+
+  /** Slots blocked by the non-cancelled bookings of a professional and day. */
   private async occupiedSlotsFor(
     date: string,
     professionalId: string,
@@ -350,22 +427,10 @@ export class BookingsService {
       filter._id = { $ne: excludeId };
     }
     const bookings = await this.bookingModel
-      .find(filter, { time: 1, 'service.duration': 1, slots: 1, status: 1 })
-      .lean<ExistingBooking[]>()
+      .find(filter, { slots: 1 })
+      .lean<OccupyingBooking[]>()
       .exec();
-
-    const interval =
-      this.catalogService.getCatalog().schedule.slotIntervalMinutes;
-    const occupied = occupiedSlots(bookings, interval);
-    for (const booking of bookings) {
-      if (booking.status === CANCELLED) {
-        continue;
-      }
-      for (const slot of booking.slots ?? []) {
-        occupied.add(slot);
-      }
-    }
-    return occupied;
+    return occupiedSlots(bookings);
   }
 
   /** Maps a Mongo duplicate key error (unique slot index) to a business conflict. */

@@ -1,9 +1,8 @@
 import { DayOfWeek, WeeklySchedule } from '../catalog/catalog.config';
 
+/** The part of a booking that blocks the agenda: the slots it occupies. */
 export interface OccupyingBooking {
-  time: string;
-  service?: { duration?: number } | null;
-  status?: string;
+  slots: string[];
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -83,29 +82,9 @@ export function slotsRequired(
   return Math.ceil(durationMinutes / intervalMinutes);
 }
 
-/** Slot start times blocked by the given bookings. */
-export function occupiedSlots(
-  bookings: OccupyingBooking[],
-  intervalMinutes: number,
-): Set<string> {
-  const occupied = new Set<string>();
-  for (const booking of bookings) {
-    if (booking.status === 'cancelled') {
-      continue;
-    }
-    const start = toMinutes(booking.time);
-    if (start === null) {
-      continue;
-    }
-    const count = slotsRequired(
-      booking.service?.duration as number,
-      intervalMinutes,
-    );
-    for (let i = 0; i < count; i++) {
-      occupied.add(toTime(start + i * intervalMinutes));
-    }
-  }
-  return occupied;
+/** Slot start times blocked by the given (non-cancelled) bookings. */
+export function occupiedSlots(bookings: OccupyingBooking[]): Set<string> {
+  return new Set(bookings.flatMap((booking) => booking.slots));
 }
 
 /**
@@ -134,4 +113,28 @@ export function freeStartTimes(
     }
     return true;
   });
+}
+
+/**
+ * The `required` consecutive day slots a window starting at `time` occupies,
+ * or null when it does not fit (off the slot grid, crossing lunch or closing
+ * time, or a closed day).
+ */
+export function windowSlots(
+  daySlots: string[],
+  time: string,
+  required: number,
+  intervalMinutes: number,
+): string[] | null {
+  const validStarts = freeStartTimes(
+    daySlots,
+    new Set(),
+    required,
+    intervalMinutes,
+  );
+  if (!validStarts.includes(time)) {
+    return null;
+  }
+  const start = daySlots.indexOf(time);
+  return daySlots.slice(start, start + required);
 }

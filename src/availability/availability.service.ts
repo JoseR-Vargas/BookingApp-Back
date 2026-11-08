@@ -80,7 +80,6 @@ export class AvailabilityService {
           daySlots,
           occupiedSlots(
             bookings.filter((b) => b.professional?.id === professional.id),
-            interval,
           ),
           required,
           interval,
@@ -100,7 +99,7 @@ export class AvailabilityService {
           'professional.id': { $in: professionalIds },
           status: { $ne: 'cancelled' },
         },
-        { 'professional.id': 1, 'service.duration': 1, time: 1, status: 1 },
+        { 'professional.id': 1, slots: 1 },
       )
       .lean<BookedSlot[]>()
       .exec();

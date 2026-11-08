@@ -440,12 +440,7 @@ describe('BotHandler', () => {
 
       expect(bookings.create).toHaveBeenCalledWith({
         client: { name: 'Ana', phone: PHONE },
-        service: {
-          id: 'servicio-basico',
-          name: 'Servicio Básico',
-          price: 1200,
-          duration: 60,
-        },
+        services: [{ id: 'servicio-basico' }],
         professional: { id: 'alex-garcia', name: 'Alex García' },
         date: '2026-10-27',
         time: '10:00',

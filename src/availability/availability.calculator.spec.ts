@@ -5,6 +5,7 @@ import {
   freeStartTimes,
   occupiedSlots,
   slotsRequired,
+  windowSlots,
 } from './availability.calculator';
 
 const INTERVAL = SCHEDULE.slotIntervalMinutes;
@@ -30,11 +31,6 @@ const SATURDAY_SLOTS = [
   '16:00',
   '17:00',
 ];
-
-const booking = (time: string, duration?: unknown) => ({
-  time,
-  service: { duration } as { duration?: number },
-});
 
 describe('availability.calculator', () => {
   describe('dayOfWeekFromIsoDate', () => {
@@ -101,29 +97,42 @@ describe('availability.calculator', () => {
   });
 
   describe('occupiedSlots', () => {
-    it('blocks two slots for a 90-minute booking', () => {
-      expect(
-        [...occupiedSlots([booking('10:00', 90)], INTERVAL)].sort(),
-      ).toEqual(['10:00', '11:00']);
+    it('unites the slots stored on every booking', () => {
+      const result = occupiedSlots([
+        { slots: ['10:00', '11:00'] },
+        { slots: ['15:00'] },
+      ]);
+      expect([...result].sort()).toEqual(['10:00', '11:00', '15:00']);
     });
 
-    it('blocks one slot when the booking duration is missing', () => {
-      expect([...occupiedSlots([booking('15:00')], INTERVAL)]).toEqual([
-        '15:00',
+    it('returns an empty set when there are no bookings', () => {
+      expect(occupiedSlots([]).size).toBe(0);
+    });
+  });
+
+  describe('windowSlots', () => {
+    it('returns the consecutive slots a window starting at time occupies', () => {
+      expect(windowSlots(WEEKDAY_SLOTS, '10:00', 3, INTERVAL)).toEqual([
+        '10:00',
+        '11:00',
+        '12:00',
       ]);
     });
 
-    it('ignores cancelled bookings', () => {
-      const cancelled = { ...booking('10:00', 60), status: 'cancelled' };
-      expect(occupiedSlots([cancelled], INTERVAL).size).toBe(0);
+    it('returns null when the window crosses the lunch break', () => {
+      expect(windowSlots(WEEKDAY_SLOTS, '12:00', 2, INTERVAL)).toBeNull();
     });
 
-    it('normalizes unpadded times and ignores malformed ones', () => {
-      const result = occupiedSlots(
-        [booking('9:00', 60), booking('bad', 60)],
-        INTERVAL,
-      );
-      expect([...result]).toEqual(['09:00']);
+    it('returns null when the window crosses the closing time', () => {
+      expect(windowSlots(WEEKDAY_SLOTS, '19:00', 2, INTERVAL)).toBeNull();
+    });
+
+    it('returns null for a start time outside the slot grid', () => {
+      expect(windowSlots(WEEKDAY_SLOTS, '10:30', 1, INTERVAL)).toBeNull();
+    });
+
+    it('returns null on a closed day', () => {
+      expect(windowSlots([], '10:00', 1, INTERVAL)).toBeNull();
     });
   });
 
