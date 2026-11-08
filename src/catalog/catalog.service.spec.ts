@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { SERVICES } from './catalog.config';
 import { CatalogService } from './catalog.service';
+import { ServiceSelectionError } from './service-selection';
 
 describe('CatalogService', () => {
   let service: CatalogService;
@@ -86,6 +88,82 @@ describe('CatalogService', () => {
 
     it('returns undefined when the id does not exist', () => {
       expect(service.findProfessional('unknown')).toBeUndefined();
+    });
+  });
+
+  describe('resolveServices', () => {
+    it('resolves the services in the given order with accumulated totals', () => {
+      const selection = service.resolveServices([
+        'servicio-premium',
+        'consulta-inicial',
+        'servicio-basico',
+      ]);
+
+      expect(selection.services.map((s) => s.id)).toEqual([
+        'servicio-premium',
+        'consulta-inicial',
+        'servicio-basico',
+      ]);
+      expect(selection.totalPrice).toBe(4200);
+      expect(selection.totalDuration).toBe(180);
+    });
+
+    it('returns the professionals that offer every selected service', () => {
+      const selection = service.resolveServices([
+        'consulta-inicial',
+        'sesion-expres',
+      ]);
+
+      expect(selection.professionals.map((p) => p.id)).toEqual([
+        'alex-garcia',
+        'maria-lopez',
+      ]);
+    });
+
+    it('keeps only professionals common to all services', () => {
+      jest.spyOn(service, 'findService').mockImplementation((id) => {
+        const base = SERVICES.find((s) => s.id === id)!;
+        return id === 'servicio-premium'
+          ? { ...base, professionals: ['maria-lopez'] }
+          : base;
+      });
+
+      const selection = service.resolveServices([
+        'consulta-inicial',
+        'servicio-premium',
+      ]);
+
+      expect(selection.professionals.map((p) => p.id)).toEqual(['maria-lopez']);
+    });
+
+    it('rejects an empty list', () => {
+      expect(() => service.resolveServices([])).toThrow(ServiceSelectionError);
+      expect(() => service.resolveServices([])).toThrow(
+        'debes seleccionar al menos un servicio',
+      );
+    });
+
+    it('rejects an unknown service id', () => {
+      expect.assertions(3);
+      try {
+        service.resolveServices(['consulta-inicial', 'unknown']);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServiceSelectionError);
+        expect((error as ServiceSelectionError).failure).toBe('unknown');
+        expect((error as ServiceSelectionError).serviceId).toBe('unknown');
+      }
+    });
+
+    it('rejects a duplicated service id', () => {
+      expect.assertions(2);
+      try {
+        service.resolveServices(['consulta-inicial', 'consulta-inicial']);
+      } catch (error) {
+        expect((error as ServiceSelectionError).failure).toBe('duplicate');
+        expect((error as ServiceSelectionError).serviceId).toBe(
+          'consulta-inicial',
+        );
+      }
     });
   });
 
