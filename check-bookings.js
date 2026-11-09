@@ -13,7 +13,7 @@ async function check() {
   bookings.forEach((booking, i) => {
     console.log(`\n--- Reserva ${i + 1} ---`);
     console.log('Cliente:', booking.client?.name);
-    console.log('Servicio:', booking.service?.name);
+    console.log('Servicios:', (booking.services ?? []).map((service) => service.name).join(', '));
     console.log('Tiene barber:', !!booking.barber);
     console.log('Tiene professional:', !!booking.professional);
     if (booking.barber) console.log('Barber:', booking.barber);
