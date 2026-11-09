@@ -120,7 +120,7 @@ the admin a WhatsApp **template** message. The admin is usually outside the
   | Variable | Content                       | Example for Meta's form |
   | -------- | ----------------------------- | ----------------------- |
   | `{{1}}`  | Client name                   | `Juan Pérez`            |
-  | `{{2}}`  | Service name                  | `Servicio Premium`      |
+  | `{{2}}`  | Service names, joined by `, ` | `Servicio Premium`      |
   | `{{3}}`  | Professional name             | `Alex García`           |
   | `{{4}}`  | Date, `dd/mm/yyyy`            | `25/03/2026`            |
   | `{{5}}`  | Time, `HH:MM`                 | `10:00`                 |
@@ -258,7 +258,7 @@ signature check.
     -H "Content-Type: application/json" \
     -d '{
       "client": {"name": "Prueba Smoke", "phone": "5491155551234", "email": "smoke@example.com"},
-      "service": {"id": "servicio-basico", "name": "x", "price": 0, "duration": 0},
+      "services": [{"id": "servicio-basico"}],
       "professional": {"id": "alex-garcia", "name": "x"},
       "date": "2030-01-08",
       "time": "10:00"

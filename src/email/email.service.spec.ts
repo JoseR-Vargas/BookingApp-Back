@@ -37,7 +37,7 @@ describe('EmailService', () => {
   it('lists every service (escaped) and the total price in the email', async () => {
     await emailService.sendBookingConfirmation(booking);
 
-    const { html } = sendMail.mock.calls[0][0];
+    const [{ html }] = sendMail.mock.calls[0] as [{ html: string }];
     expect(html).toContain('Consulta Inicial');
     expect(html).toContain('Servicio &lt;Premium&gt;');
     expect(html).toContain(`$${(3000).toLocaleString('es-AR')}`);
@@ -46,7 +46,7 @@ describe('EmailService', () => {
   it('names every service in the subject', async () => {
     await emailService.sendBookingConfirmation(booking);
 
-    expect(sendMail.mock.calls[0][0]).toEqual(
+    expect((sendMail.mock.calls[0] as unknown[])[0]).toEqual(
       expect.objectContaining({
         to: 'juan@example.com',
         subject:
