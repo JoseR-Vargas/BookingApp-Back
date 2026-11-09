@@ -69,30 +69,32 @@ describe('BotHandler', () => {
   /** Same output shape as AvailabilityService with no bookings at all. */
   const openAvailability = (
     date: string,
-    serviceId: string,
-  ): Promise<Availability | null> => {
-    const catalog = new CatalogService();
-    const service = catalog.findService(serviceId);
-    if (!service) return Promise.resolve(null);
+    serviceIds: string[],
+  ): Promise<Availability> => {
+    const { services, professionals, totalDuration } =
+      new CatalogService().resolveServices(serviceIds);
     const dayOfWeek = dayOfWeekFromIsoDate(date) as 0;
     const daySlots = buildDaySlots(dayOfWeek, SCHEDULE);
     const slots = freeStartTimes(
       daySlots,
       new Set(),
-      slotsRequired(service.duration, SCHEDULE.slotIntervalMinutes),
+      slotsRequired(totalDuration, SCHEDULE.slotIntervalMinutes),
       SCHEDULE.slotIntervalMinutes,
     );
     return Promise.resolve({
       date,
       closed: daySlots.length === 0,
-      service: {
-        id: service.id,
-        name: service.name,
-        duration: service.duration,
-      },
-      professionals: catalog
-        .getProfessionalsForService(serviceId)
-        .map((p) => ({ id: p.id, name: p.name, slots: [...slots] })),
+      services: services.map(({ id, name, duration }) => ({
+        id,
+        name,
+        duration,
+      })),
+      totalDuration,
+      professionals: professionals.map((p) => ({
+        id: p.id,
+        name: p.name,
+        slots: [...slots],
+      })),
     } satisfies Availability);
   };
   const availability = { getAvailability: jest.fn(openAvailability) };
@@ -251,7 +253,8 @@ describe('BotHandler', () => {
       availability.getAvailability.mockResolvedValue({
         date: '2026-10-27',
         closed: false,
-        service: { id: 'servicio-basico', name: 'x', duration: 60 },
+        services: [{ id: 'servicio-basico', name: 'x', duration: 60 }],
+        totalDuration: 60,
         professionals: [
           {
             id: 'alex-garcia',
@@ -317,7 +320,8 @@ describe('BotHandler', () => {
       availability.getAvailability.mockResolvedValue({
         date: '2026-10-27',
         closed: false,
-        service: { id: 'servicio-basico', name: 'x', duration: 60 },
+        services: [{ id: 'servicio-basico', name: 'x', duration: 60 }],
+        totalDuration: 60,
         professionals: [
           { id: 'alex-garcia', name: 'Alex García', slots: ['11:00'] },
           { id: 'maria-lopez', name: 'María López', slots: ['10:00', '11:00'] },
@@ -342,7 +346,8 @@ describe('BotHandler', () => {
       availability.getAvailability.mockResolvedValue({
         date: '2026-10-27',
         closed: false,
-        service: { id: 'servicio-basico', name: 'x', duration: 60 },
+        services: [{ id: 'servicio-basico', name: 'x', duration: 60 }],
+        totalDuration: 60,
         professionals: [
           { id: 'alex-garcia', name: 'Alex García', slots: ['11:00'] },
           { id: 'maria-lopez', name: 'María López', slots: ['11:00'] },

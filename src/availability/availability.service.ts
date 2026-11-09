@@ -21,7 +21,8 @@ export interface ProfessionalAvailability {
 export interface Availability {
   date: string;
   closed: boolean;
-  service: { id: string; name: string; duration: number };
+  services: { id: string; name: string; duration: number }[];
+  totalDuration: number;
   professionals: ProfessionalAvailability[];
 }
 
@@ -34,25 +35,23 @@ export class AvailabilityService {
     private readonly catalogService: CatalogService,
   ) {}
 
-  /** Returns null when the service does not exist. */
+  /**
+   * Free start times, per professional offering ALL the services, for the
+   * back-to-back block of the services. Throws a ServiceSelectionError for an
+   * empty, duplicated or unknown service id.
+   */
   async getAvailability(
     date: string,
-    serviceId: string,
-  ): Promise<Availability | null> {
+    serviceIds: string[],
+  ): Promise<Availability> {
     const dayOfWeek = dayOfWeekFromIsoDate(date);
     if (dayOfWeek === null) {
       throw new BadRequestException('date must be a valid YYYY-MM-DD date');
     }
-    const service = this.catalogService.findService(serviceId);
-    if (!service) {
-      return null;
-    }
+    const { services, professionals, totalDuration } =
+      this.catalogService.resolveServices(serviceIds);
 
-    const { schedule, professionals: allProfessionals } =
-      this.catalogService.getCatalog();
-    const professionals = allProfessionals.filter((professional) =>
-      service.professionals.includes(professional.id),
-    );
+    const { schedule } = this.catalogService.getCatalog();
     const daySlots = buildDaySlots(dayOfWeek, schedule);
     const closed = daySlots.length === 0;
     const bookings = closed
@@ -63,16 +62,17 @@ export class AvailabilityService {
         );
 
     const interval = schedule.slotIntervalMinutes;
-    const required = slotsRequired(service.duration, interval);
+    const required = slotsRequired(totalDuration, interval);
 
     return {
       date,
       closed,
-      service: {
-        id: service.id,
-        name: service.name,
-        duration: service.duration,
-      },
+      services: services.map(({ id, name, duration }) => ({
+        id,
+        name,
+        duration,
+      })),
+      totalDuration,
       professionals: professionals.map((professional) => ({
         id: professional.id,
         name: professional.name,

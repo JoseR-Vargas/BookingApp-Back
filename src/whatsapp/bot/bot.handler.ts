@@ -421,11 +421,10 @@ export class BotHandler extends WhatsappMessageHandler {
     serviceId: string,
     date: string,
   ): Promise<FreeProfessional[]> {
-    const availability = await this.availability.getAvailability(
-      date,
+    const availability = await this.availability.getAvailability(date, [
       serviceId,
-    );
-    return (availability?.professionals ?? []).map((professional) => ({
+    ]);
+    return availability.professionals.map((professional) => ({
       ...professional,
       slots: dropPastTimes(date, professional.slots, ctx.now),
     }));

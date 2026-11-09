@@ -5,8 +5,23 @@ import {
   NotFoundException,
   Query,
 } from '@nestjs/common';
+import { ServiceSelectionError } from '../catalog/service-selection';
 import { dayOfWeekFromIsoDate } from './availability.calculator';
 import { Availability, AvailabilityService } from './availability.service';
+
+/** Splits `a,b,c` into trimmed ids; anything else is a client error. */
+function parseServiceIds(value: unknown): string[] {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new BadRequestException('serviceIds is required');
+  }
+  const ids = value.split(',').map((id) => id.trim());
+  if (ids.some((id) => id === '')) {
+    throw new BadRequestException(
+      'serviceIds must be a comma-separated list of service ids',
+    );
+  }
+  return ids;
+}
 
 @Controller('availability')
 export class AvailabilityController {
@@ -15,21 +30,26 @@ export class AvailabilityController {
   @Get()
   async getAvailability(
     @Query('date') date: string,
-    @Query('serviceId') serviceId: string,
+    @Query('serviceIds') serviceIds: string,
   ): Promise<Availability> {
     if (typeof date !== 'string' || dayOfWeekFromIsoDate(date) === null) {
       throw new BadRequestException('date must be a valid YYYY-MM-DD date');
     }
-    if (typeof serviceId !== 'string' || serviceId.trim() === '') {
-      throw new BadRequestException('serviceId is required');
+    const ids = parseServiceIds(serviceIds);
+    try {
+      return await this.availabilityService.getAvailability(date, ids);
+    } catch (error) {
+      throw this.toHttpException(error);
     }
-    const availability = await this.availabilityService.getAvailability(
-      date,
-      serviceId,
-    );
-    if (!availability) {
-      throw new NotFoundException(`Service "${serviceId}" not found`);
+  }
+
+  /** Unknown service -> 404, other invalid selections -> 400. */
+  private toHttpException(error: unknown): unknown {
+    if (!(error instanceof ServiceSelectionError)) {
+      return error;
     }
-    return availability;
+    return error.failure === 'unknown'
+      ? new NotFoundException(`Service "${error.serviceId}" not found`)
+      : new BadRequestException(error.message);
   }
 }
