@@ -67,7 +67,10 @@ describe('CatalogService', () => {
         });
       }
       expect(schedule.slotIntervalMinutes).toBe(60);
-      expect(schedule.lunchBreak).toEqual({ start: 13, end: 14 });
+      expect(Object.keys(schedule).sort()).toEqual([
+        'slotIntervalMinutes',
+        'weekly',
+      ]);
     });
   });
 

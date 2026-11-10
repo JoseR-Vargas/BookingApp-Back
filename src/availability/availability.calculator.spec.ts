@@ -14,6 +14,7 @@ const WEEKDAY_SLOTS = [
   '10:00',
   '11:00',
   '12:00',
+  '13:00',
   '14:00',
   '15:00',
   '16:00',
@@ -26,6 +27,7 @@ const SATURDAY_SLOTS = [
   '10:00',
   '11:00',
   '12:00',
+  '13:00',
   '14:00',
   '15:00',
   '16:00',
@@ -58,12 +60,12 @@ describe('availability.calculator', () => {
   });
 
   describe('buildDaySlots', () => {
-    it('builds hourly weekday slots from 09:00 to 19:00 skipping lunch', () => {
+    it('builds hourly weekday slots from 09:00 to 19:00 without gaps', () => {
       expect(buildDaySlots(1, SCHEDULE)).toEqual(WEEKDAY_SLOTS);
       expect(buildDaySlots(5, SCHEDULE)).toEqual(WEEKDAY_SLOTS);
     });
 
-    it('builds Saturday slots from 09:00 to 17:00 skipping lunch', () => {
+    it('builds Saturday slots from 09:00 to 17:00 without gaps', () => {
       expect(buildDaySlots(6, SCHEDULE)).toEqual(SATURDAY_SLOTS);
     });
 
@@ -71,8 +73,8 @@ describe('availability.calculator', () => {
       expect(buildDaySlots(0, SCHEDULE)).toEqual([]);
     });
 
-    it('never includes the 13:00 lunch slot', () => {
-      expect(buildDaySlots(3, SCHEDULE)).not.toContain('13:00');
+    it('offers 13:00 as a regular slot', () => {
+      expect(buildDaySlots(3, SCHEDULE)).toContain('13:00');
     });
   });
 
@@ -119,8 +121,11 @@ describe('availability.calculator', () => {
       ]);
     });
 
-    it('returns null when the window crosses the lunch break', () => {
-      expect(windowSlots(WEEKDAY_SLOTS, '12:00', 2, INTERVAL)).toBeNull();
+    it('returns the window through midday since the day runs continuously', () => {
+      expect(windowSlots(WEEKDAY_SLOTS, '12:00', 2, INTERVAL)).toEqual([
+        '12:00',
+        '13:00',
+      ]);
     });
 
     it('returns null when the window crosses the closing time', () => {
@@ -171,14 +176,16 @@ describe('availability.calculator', () => {
       expect(result).toContain('09:00');
     });
 
-    it('does not offer a 90-minute service across lunch or at weekday close', () => {
+    it('offers a 90-minute service at midday but not at weekday close', () => {
       const result = freeStartTimes(WEEKDAY_SLOTS, none, 2, INTERVAL);
-      expect(result).not.toContain('12:00');
+      expect(result).toContain('12:00');
       expect(result).not.toContain('19:00');
       expect(result).toEqual([
         '09:00',
         '10:00',
         '11:00',
+        '12:00',
+        '13:00',
         '14:00',
         '15:00',
         '16:00',

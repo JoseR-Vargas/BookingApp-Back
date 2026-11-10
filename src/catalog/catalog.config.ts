@@ -28,7 +28,6 @@ export type DaySchedule =
 export interface WeeklySchedule {
   weekly: Record<DayOfWeek, DaySchedule>;
   slotIntervalMinutes: number;
-  lunchBreak: { start: number; end: number };
 }
 
 export interface Catalog {
@@ -111,5 +110,4 @@ export const SCHEDULE: WeeklySchedule = {
     6: { closed: false, open: 9, close: 18 },
   },
   slotIntervalMinutes: 60,
-  lunchBreak: { start: 13, end: 14 },
 };

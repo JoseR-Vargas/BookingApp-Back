@@ -236,10 +236,11 @@ describe('BotHandler', () => {
         step: 'choose_time',
         data: { serviceId: 'servicio-basico', date: '2026-10-26' },
       });
-      // Now is 10:00 local: 09:00 and 10:00 are gone, lunch (13:00) is skipped.
+      // Now is 10:00 local: 09:00 and 10:00 are gone, 13:00 is a regular slot.
       expect(rowIds(lastCall(client.sendInteractiveList))).toEqual([
         'time:11:00',
         'time:12:00',
+        'time:13:00',
         'time:14:00',
         'time:15:00',
         'time:16:00',

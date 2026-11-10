@@ -251,7 +251,7 @@ signature check.
 ### 6.4 Booking through the web API and the admin message
 
 - [ ] Create a booking (pick a future weekday and a valid hour; business
-      hours are Mon-Fri 09-20, Sat 09-18, closed Sunday, lunch 13-14):
+      hours are Mon-Fri 09-20, Sat 09-18, closed Sunday, continuous with no midday break):
 
   ```bash
   curl -i -X POST "$API/bookings" \

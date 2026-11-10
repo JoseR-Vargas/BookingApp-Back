@@ -344,16 +344,14 @@ describe('BookingsService', () => {
       expect(mockSave).not.toHaveBeenCalled();
     });
 
-    it('debería rechazar un servicio de 90 min que cruza el almuerzo (12:00)', async () => {
-      const dto = {
+    it('debería aceptar un servicio de 90 min a mediodía (12:00 y 13:00)', async () => {
+      await service.create({
         ...mockBookingDto,
         services: [{ id: 'servicio-premium' }],
         time: '12:00',
-      };
+      });
 
-      await expect(service.create(dto)).rejects.toThrow(
-        'Error de validación: el horario 12:00 no está disponible para Servicio Premium el 2026-03-25',
-      );
+      expect(savedDoc().slots).toEqual(['12:00', '13:00']);
     });
 
     it('debería rechazar un servicio de 90 min que cruza el cierre (19:00)', async () => {
@@ -366,15 +364,15 @@ describe('BookingsService', () => {
       await expect(service.create(dto)).rejects.toThrow('Error de validación');
     });
 
-    it('debería rechazar varios servicios cuyo bloque total cruza el almuerzo', async () => {
+    it('debería rechazar varios servicios cuyo bloque total cruza el cierre', async () => {
       const dto = {
         ...mockBookingDto,
         services: [{ id: 'servicio-basico' }, { id: 'servicio-premium' }],
-        time: '11:00',
+        time: '18:00',
       };
 
       await expect(service.create(dto)).rejects.toThrow(
-        'Error de validación: el horario 11:00 no está disponible para Servicio Básico, Servicio Premium el 2026-03-25',
+        'Error de validación: el horario 18:00 no está disponible para Servicio Básico, Servicio Premium el 2026-03-25',
       );
     });
 
@@ -821,7 +819,7 @@ describe('BookingsService', () => {
 
     it('debería retornar available: false si la ventana no entra en el horario', async () => {
       expect(
-        await check('11:00', ['servicio-basico', 'servicio-premium']),
+        await check('18:00', ['servicio-basico', 'servicio-premium']),
       ).toEqual({ available: false });
     });
 

@@ -45,7 +45,7 @@ function toTime(minutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
-/** Bookable start times of a day, skipping the lunch break. */
+/** Bookable start times of a day: every interval from opening to closing. */
 export function buildDaySlots(
   dayOfWeek: DayOfWeek,
   schedule: WeeklySchedule,
@@ -54,14 +54,12 @@ export function buildDaySlots(
   if (day.closed) {
     return [];
   }
-  const { slotIntervalMinutes: interval, lunchBreak } = schedule;
-  const lunchStart = lunchBreak.start * 60;
-  const lunchEnd = lunchBreak.end * 60;
   const slots: string[] = [];
-  for (let start = day.open * 60; start < day.close * 60; start += interval) {
-    if (start >= lunchStart && start < lunchEnd) {
-      continue;
-    }
+  for (
+    let start = day.open * 60;
+    start < day.close * 60;
+    start += schedule.slotIntervalMinutes
+  ) {
     slots.push(toTime(start));
   }
   return slots;
@@ -89,7 +87,7 @@ export function occupiedSlots(bookings: OccupyingBooking[]): Set<string> {
 
 /**
  * Start times where `required` contiguous day slots exist and are all free.
- * Contiguity prevents crossing the lunch break or closing time.
+ * Contiguity prevents a window from running past the closing time.
  */
 export function freeStartTimes(
   daySlots: string[],
@@ -117,8 +115,8 @@ export function freeStartTimes(
 
 /**
  * The `required` consecutive day slots a window starting at `time` occupies,
- * or null when it does not fit (off the slot grid, crossing lunch or closing
- * time, or a closed day).
+ * or null when it does not fit (off the slot grid, crossing the closing time,
+ * or a closed day).
  */
 export function windowSlots(
   daySlots: string[],

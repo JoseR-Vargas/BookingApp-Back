@@ -88,12 +88,21 @@ describe('AvailabilityService', () => {
         {
           id: 'alex-garcia',
           name: 'Alex García',
-          slots: ['14:00', '15:00', '16:00', '17:00', '18:00'],
+          slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'],
         },
         {
           id: 'maria-lopez',
           name: 'María López',
-          slots: ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'],
+          slots: [
+            '09:00',
+            '10:00',
+            '11:00',
+            '12:00',
+            '13:00',
+            '14:00',
+            '15:00',
+            '16:00',
+          ],
         },
       ],
     });
@@ -115,17 +124,27 @@ describe('AvailabilityService', () => {
       'servicio-basico',
       'servicio-premium',
     ]);
-    // 180 min = 3 consecutive slots; lunch and Alex's 16:00 booking block starts.
+    // 180 min = 3 consecutive slots; Alex's 16:00 booking blocks 14:00-16:00 starts.
     expect(result.professionals).toEqual([
       {
         id: 'alex-garcia',
         name: 'Alex García',
-        slots: ['09:00', '10:00', '17:00'],
+        slots: ['09:00', '10:00', '11:00', '12:00', '13:00', '17:00'],
       },
       {
         id: 'maria-lopez',
         name: 'María López',
-        slots: ['09:00', '10:00', '14:00', '15:00', '16:00', '17:00'],
+        slots: [
+          '09:00',
+          '10:00',
+          '11:00',
+          '12:00',
+          '13:00',
+          '14:00',
+          '15:00',
+          '16:00',
+          '17:00',
+        ],
       },
     ]);
   });
