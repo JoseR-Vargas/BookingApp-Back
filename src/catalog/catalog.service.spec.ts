@@ -66,7 +66,7 @@ describe('CatalogService', () => {
           close: 20,
         });
       }
-      expect(schedule.slotIntervalMinutes).toBe(60);
+      expect(schedule.slotIntervalMinutes).toBe(30);
       expect(Object.keys(schedule).sort()).toEqual([
         'slotIntervalMinutes',
         'weekly',

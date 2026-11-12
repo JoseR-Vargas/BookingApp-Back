@@ -236,17 +236,20 @@ describe('BotHandler', () => {
         step: 'choose_time',
         data: { serviceId: 'servicio-basico', date: '2026-10-26' },
       });
-      // Now is 10:00 local: 09:00 and 10:00 are gone, 13:00 is a regular slot.
+      // Now is 10:00 local: everything up to 10:30 is gone, 13:00 is a regular
+      // slot. The 30-minute grid has more than 10 starts left, so the list is
+      // capped at MAX_LIST_ROWS (known limitation, pending product decision).
       expect(rowIds(lastCall(client.sendInteractiveList))).toEqual([
         'time:11:00',
+        'time:11:30',
         'time:12:00',
+        'time:12:30',
         'time:13:00',
+        'time:13:30',
         'time:14:00',
+        'time:14:30',
         'time:15:00',
-        'time:16:00',
-        'time:17:00',
-        'time:18:00',
-        'time:19:00',
+        'time:15:30',
       ]);
     });
 

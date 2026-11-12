@@ -5,6 +5,21 @@ import { CatalogService } from '../catalog/catalog.service';
 import { Booking } from '../bookings/schemas/booking.schema';
 import { AvailabilityService } from './availability.service';
 
+/** Half-hour start times from `first` to `last`, both inclusive. */
+const times = (first: string, last: string): string[] => {
+  const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+  const result: string[] = [];
+  for (let at = toMinutes(first); at <= toMinutes(last); at += 30) {
+    result.push(
+      `${String(Math.floor(at / 60)).padStart(2, '0')}:${String(at % 60).padStart(2, '0')}`,
+    );
+  }
+  return result;
+};
+
 describe('AvailabilityService', () => {
   let service: AvailabilityService;
   let bookings: unknown[];
@@ -69,7 +84,7 @@ describe('AvailabilityService', () => {
 
   it('computes free slots per professional for a single service', async () => {
     bookings = [
-      { professional: { id: 'alex-garcia' }, slots: ['10:00', '11:00'] },
+      { professional: { id: 'alex-garcia' }, slots: ['10:00', '10:30'] },
       { professional: { id: 'maria-lopez' }, slots: ['18:00'] },
     ];
 
@@ -88,21 +103,14 @@ describe('AvailabilityService', () => {
         {
           id: 'alex-garcia',
           name: 'Alex García',
-          slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'],
+          // 90 min = 3 blocks; the 10:00 booking blocks starts 09:00-10:30.
+          slots: times('11:00', '18:30'),
         },
         {
           id: 'maria-lopez',
           name: 'María López',
-          slots: [
-            '09:00',
-            '10:00',
-            '11:00',
-            '12:00',
-            '13:00',
-            '14:00',
-            '15:00',
-            '16:00',
-          ],
+          // 18:00 is taken: starts 17:00-18:00 are blocked, 18:30 still fits.
+          slots: [...times('09:00', '16:30'), '18:30'],
         },
       ],
     });
@@ -110,7 +118,9 @@ describe('AvailabilityService', () => {
   });
 
   it('sizes the free window to the TOTAL duration of several services', async () => {
-    bookings = [{ professional: { id: 'alex-garcia' }, slots: ['16:00'] }];
+    bookings = [
+      { professional: { id: 'alex-garcia' }, slots: ['16:00', '16:30'] },
+    ];
 
     const result = await service.getAvailability('2026-10-19', [
       'consulta-inicial',
@@ -124,29 +134,61 @@ describe('AvailabilityService', () => {
       'servicio-basico',
       'servicio-premium',
     ]);
-    // 180 min = 3 consecutive slots; Alex's 16:00 booking blocks 14:00-16:00 starts.
+    // 180 min = 6 consecutive blocks; Alex's 16:00-17:00 booking splits the day.
     expect(result.professionals).toEqual([
       {
         id: 'alex-garcia',
         name: 'Alex García',
-        slots: ['09:00', '10:00', '11:00', '12:00', '13:00', '17:00'],
+        slots: [...times('09:00', '13:00'), '17:00'],
       },
       {
         id: 'maria-lopez',
         name: 'María López',
-        slots: [
-          '09:00',
-          '10:00',
-          '11:00',
-          '12:00',
-          '13:00',
-          '14:00',
-          '15:00',
-          '16:00',
-          '17:00',
-        ],
+        slots: times('09:00', '17:00'),
       },
     ]);
+  });
+
+  describe('30-minute grid', () => {
+    const alexSlots = async (serviceId: string) => {
+      const result = await service.getAvailability('2026-10-19', [serviceId]);
+      return result.professionals.find((p) => p.id === 'alex-garcia')!.slots;
+    };
+
+    it('a 20-minute booking at 09:00 leaves 09:30 free', async () => {
+      bookings = [{ professional: { id: 'alex-garcia' }, slots: ['09:00'] }];
+
+      const slots = await alexSlots('sesion-expres');
+
+      expect(slots).not.toContain('09:00');
+      expect(slots).toContain('09:30');
+    });
+
+    it('a 90-minute booking at 09:00 blocks 09:30 and 10:00 and frees 10:30', async () => {
+      bookings = [
+        {
+          professional: { id: 'alex-garcia' },
+          slots: ['09:00', '09:30', '10:00'],
+        },
+      ];
+
+      const slots = await alexSlots('consulta-inicial');
+
+      expect(slots).not.toContain('09:30');
+      expect(slots).not.toContain('10:00');
+      expect(slots[0]).toBe('10:30');
+    });
+
+    it('offers the last start that fits before closing, weekday and Saturday', async () => {
+      const weekday = await alexSlots('servicio-premium');
+      expect(weekday[weekday.length - 1]).toBe('18:30');
+
+      const saturday = await service.getAvailability('2026-10-24', [
+        'servicio-premium',
+      ]);
+      const saturdaySlots = saturday.professionals[0].slots;
+      expect(saturdaySlots[saturdaySlots.length - 1]).toBe('16:30');
+    });
   });
 
   it('only lists professionals offering ALL the services', async () => {

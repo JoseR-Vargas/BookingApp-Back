@@ -109,5 +109,5 @@ export const SCHEDULE: WeeklySchedule = {
     5: WEEKDAY,
     6: { closed: false, open: 9, close: 18 },
   },
-  slotIntervalMinutes: 60,
+  slotIntervalMinutes: 30,
 };

@@ -37,6 +37,15 @@ const SERVICES: Service[] = [
     professionals: ['alex-garcia'],
     icon: '',
   },
+  {
+    id: 'sesion-expres',
+    name: 'Sesión Exprés',
+    description: '',
+    price: 700,
+    duration: 20,
+    professionals: ['alex-garcia', 'maria-lopez'],
+    icon: '',
+  },
 ];
 
 // 2026-03-25 is a Wednesday; 2026-03-29 is a Sunday.
@@ -68,7 +77,7 @@ const mockBooking = {
   ],
   totalPrice: 1200,
   totalDuration: 60,
-  slots: ['10:00'],
+  slots: ['10:00', '10:30'],
   notes: '',
   status: 'confirmed',
   createdAt: '2026-03-21T10:00:00.000Z',
@@ -173,7 +182,7 @@ describe('BookingsService', () => {
       });
 
       const doc = savedDoc();
-      expect(doc.slots).toEqual(['11:00', '12:00']);
+      expect(doc.slots).toEqual(['11:00', '11:30', '12:00']);
       expect(doc.services).toEqual([
         {
           id: 'servicio-premium',
@@ -204,13 +213,13 @@ describe('BookingsService', () => {
       ]);
       expect(doc.totalPrice).toBe(3700);
       expect(doc.totalDuration).toBe(150);
-      expect(doc.slots).toEqual(['10:00', '11:00', '12:00']);
+      expect(doc.slots).toEqual(['10:00', '10:30', '11:00', '11:30', '12:00']);
     });
 
     it('no debería confiar en los slots enviados por el cliente', async () => {
       await service.create({ ...mockBookingDto, slots: ['18:00'] } as any);
 
-      expect(savedDoc().slots).toEqual(['10:00']);
+      expect(savedDoc().slots).toEqual(['10:00', '10:30']);
     });
 
     it('debería lanzar error si falta fecha y hora', async () => {
@@ -335,23 +344,100 @@ describe('BookingsService', () => {
       );
     });
 
-    it('debería rechazar una hora fuera de la grilla (10:30)', async () => {
-      await expect(
-        service.create({ ...mockBookingDto, time: '10:30' }),
-      ).rejects.toThrow(
-        'Error de validación: el horario 10:30 no está disponible para Servicio Básico el 2026-03-25',
-      );
-      expect(mockSave).not.toHaveBeenCalled();
+    it.each(['09:15', '10:10', '10:45'])(
+      'debería rechazar una hora fuera de la grilla de 30 min (%s)',
+      async (time) => {
+        await expect(
+          service.create({ ...mockBookingDto, time }),
+        ).rejects.toThrow(
+          `Error de validación: el horario ${time} no está disponible para Servicio Básico el 2026-03-25`,
+        );
+        expect(mockSave).not.toHaveBeenCalled();
+      },
+    );
+
+    it('debería aceptar una hora en punto y y media (10:30)', async () => {
+      await service.create({ ...mockBookingDto, time: '10:30' });
+
+      expect(savedDoc().slots).toEqual(['10:30', '11:00']);
     });
 
-    it('debería aceptar un servicio de 90 min a mediodía (12:00 y 13:00)', async () => {
+    it('debería aceptar un servicio de 90 min a mediodía (3 bloques de 30 min)', async () => {
       await service.create({
         ...mockBookingDto,
         services: [{ id: 'servicio-premium' }],
         time: '12:00',
       });
 
-      expect(savedDoc().slots).toEqual(['12:00', '13:00']);
+      expect(savedDoc().slots).toEqual(['12:00', '12:30', '13:00']);
+    });
+
+    describe('grilla de 30 minutos', () => {
+      const createAt = (serviceId: string, time: string, date?: string) =>
+        service.create({
+          ...mockBookingDto,
+          services: [{ id: serviceId }],
+          time,
+          ...(date ? { date } : {}),
+        });
+
+      it('un servicio de 20 min a las 09:00 ocupa un bloque y libera 09:30', async () => {
+        await createAt('sesion-expres', '09:00');
+        expect(savedDoc().slots).toEqual(['09:00']);
+
+        mockBookingModel.find.mockReturnValue(query([{ slots: ['09:00'] }]));
+        mockBookingModel.mockClear();
+        await createAt('sesion-expres', '09:30');
+        expect(savedDoc().slots).toEqual(['09:30']);
+      });
+
+      it('una reserva de 90 min a las 09:00 bloquea 09:30 y 10:00 y libera 10:30', async () => {
+        await createAt('servicio-premium', '09:00');
+        expect(savedDoc().slots).toEqual(['09:00', '09:30', '10:00']);
+
+        mockBookingModel.find.mockReturnValue(
+          query([{ slots: ['09:00', '09:30', '10:00'] }]),
+        );
+        await expect(createAt('sesion-expres', '09:30')).rejects.toThrow(
+          'Ya existe una reserva',
+        );
+        await expect(createAt('sesion-expres', '10:00')).rejects.toThrow(
+          'Ya existe una reserva',
+        );
+
+        mockBookingModel.mockClear();
+        await createAt('sesion-expres', '10:30');
+        expect(savedDoc().slots).toEqual(['10:30']);
+      });
+
+      it('una reserva que termina exactamente a las :30 libera esa hora sin hueco', async () => {
+        // 60 min from 09:30 ends at 10:30.
+        mockBookingModel.find.mockReturnValue(
+          query([{ slots: ['09:30', '10:00'] }]),
+        );
+
+        await createAt('servicio-basico', '10:30');
+
+        expect(savedDoc().slots).toEqual(['10:30', '11:00']);
+      });
+
+      it.each([
+        ['servicio-basico', '19:00', '19:30', '2026-03-25'],
+        ['servicio-premium', '18:30', '19:00', '2026-03-25'],
+        ['servicio-basico', '17:00', '17:30', '2026-03-28'],
+        ['servicio-premium', '16:30', '17:00', '2026-03-28'],
+      ])(
+        '%s: %s es el último inicio válido y %s ya no entra (%s)',
+        async (serviceId, lastValid, tooLate, date) => {
+          await createAt(serviceId, lastValid, date);
+          expect(mockSave).toHaveBeenCalledTimes(1);
+
+          await expect(createAt(serviceId, tooLate, date)).rejects.toThrow(
+            'Error de validación',
+          );
+          expect(mockSave).toHaveBeenCalledTimes(1);
+        },
+      );
     });
 
     it('debería rechazar un servicio de 90 min que cruza el cierre (19:00)', async () => {
@@ -403,7 +489,7 @@ describe('BookingsService', () => {
 
     it('debería rechazar el segundo slot de una reserva existente de 90 min', async () => {
       mockBookingModel.find.mockReturnValue(
-        query([{ slots: ['10:00', '11:00'] }]),
+        query([{ slots: ['10:00', '10:30', '11:00'] }]),
       );
 
       await expect(
@@ -614,7 +700,7 @@ describe('BookingsService', () => {
       const updatedBooking = {
         ...mockBooking,
         time: '11:00',
-        slots: ['11:00'],
+        slots: ['11:00', '11:30'],
       };
       mockBookingModel.findByIdAndUpdate.mockReturnValue(query(updatedBooking));
 
@@ -636,7 +722,7 @@ describe('BookingsService', () => {
       expect(updatePayload()).toEqual(
         expect.objectContaining({
           time: '11:00',
-          slots: ['11:00'],
+          slots: ['11:00', '11:30'],
           services: mockBooking.services,
           totalPrice: 1200,
           totalDuration: 60,
@@ -649,7 +735,7 @@ describe('BookingsService', () => {
     });
 
     it('debería rechazar un cambio de hora fuera de la grilla', async () => {
-      await expect(service.update(id, { time: '10:30' })).rejects.toThrow(
+      await expect(service.update(id, { time: '10:15' })).rejects.toThrow(
         'Error de validación',
       );
       expect(mockBookingModel.findByIdAndUpdate).not.toHaveBeenCalled();
@@ -657,7 +743,7 @@ describe('BookingsService', () => {
 
     it('debería rechazar un cambio de hora que se superpone con otra reserva', async () => {
       mockBookingModel.find.mockReturnValue(
-        query([{ slots: ['11:00', '12:00'] }]),
+        query([{ slots: ['11:00', '11:30', '12:00'] }]),
       );
 
       await expect(service.update(id, { time: '12:00' })).rejects.toThrow(
@@ -714,7 +800,7 @@ describe('BookingsService', () => {
 
       expect(updatePayload()).toEqual(
         expect.objectContaining({
-          slots: ['10:00', '11:00', '12:00'],
+          slots: ['10:00', '10:30', '11:00', '11:30', '12:00'],
           totalPrice: 3700,
           totalDuration: 150,
         }),
@@ -798,7 +884,7 @@ describe('BookingsService', () => {
 
     it('debería detectar la superposición con una reserva de 90 min', async () => {
       mockBookingModel.find.mockReturnValue(
-        query([{ slots: ['10:00', '11:00'] }]),
+        query([{ slots: ['10:00', '10:30', '11:00'] }]),
       );
 
       expect(await check('11:00', ['servicio-basico'])).toEqual({
