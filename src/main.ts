@@ -3,7 +3,10 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 export async function createApp(): Promise<NestExpressApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // rawBody: the WhatsApp webhook signature is computed over the raw bytes.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   // Configurar prefijo global /api para todas las rutas excepto la raíz
   app.setGlobalPrefix('api', {

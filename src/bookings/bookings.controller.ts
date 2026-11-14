@@ -10,7 +10,15 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto } from './dto/create-booking.dto';
+import { CreateBookingDto, UpdateBookingDto } from './dto/create-booking.dto';
+
+// Messages produced by BookingsService that are client (400) errors.
+const BUSINESS_ERROR_MARKERS = [
+  'Ya existe una reserva',
+  'Ya tienes una reserva',
+  'es requerido',
+  'Error de validación',
+];
 
 // Use 'bookings' because a global prefix 'api' is set in main.ts
 @Controller('bookings')
@@ -22,35 +30,7 @@ export class BookingsController {
     try {
       return await this.bookingsService.create(createBookingDto);
     } catch (error) {
-      // Log completo del error para debugging
-      console.error('Error al crear reserva:', {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-        error: error
-      });
-
-      // Si el error es un Error de validación de negocio, devolver 400
-      if (error?.message && (
-        error.message.includes('Ya existe una reserva') ||
-        error.message.includes('Ya tienes una reserva') ||
-        error.message.includes('es requerido') ||
-        error.message.includes('Error de validación')
-      )) {
-        throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-      }
-
-      // Si es un HttpException, re-lanzarlo
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      // Para otros errores, devolver 500 con mensaje genérico
-      const errorMessage = error?.message || 'Error interno del servidor al procesar la reserva';
-      throw new HttpException(
-        errorMessage,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throw this.toHttpException(error, 'Error al crear reserva:');
     }
   }
 
@@ -60,8 +40,25 @@ export class BookingsController {
   }
 
   @Post('availability')
-  checkAvailability(@Body() body: { date: string; time: string; professionalId: string }) {
-    return this.bookingsService.checkAvailability(body.date, body.time, body.professionalId);
+  async checkAvailability(
+    @Body()
+    body: {
+      date: string;
+      time: string;
+      professionalId: string;
+      serviceIds: string[];
+    },
+  ) {
+    try {
+      return await this.bookingsService.checkAvailability(
+        body.date,
+        body.time,
+        body.professionalId,
+        body.serviceIds,
+      );
+    } catch (error) {
+      throw this.toHttpException(error, 'Error al consultar disponibilidad:');
+    }
   }
 
   @Get()
@@ -75,12 +72,46 @@ export class BookingsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateBookingDto: CreateBookingDto) {
-    return this.bookingsService.update(id, updateBookingDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateBookingDto: UpdateBookingDto,
+  ) {
+    try {
+      return await this.bookingsService.update(id, updateBookingDto);
+    } catch (error) {
+      throw this.toHttpException(error, 'Error al actualizar reserva:');
+    }
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.bookingsService.remove(id);
   }
-} 
+
+  /** Business errors map to 400, HttpExceptions pass through, the rest is 500. */
+  private toHttpException(error: unknown, logLabel: string): HttpException {
+    const err = error as { message?: string; stack?: string; name?: string };
+    // Log completo del error para debugging
+    console.error(logLabel, {
+      message: err?.message,
+      stack: err?.stack,
+      name: err?.name,
+      error,
+    });
+
+    const message = err?.message;
+    if (message && BUSINESS_ERROR_MARKERS.some((m) => message.includes(m))) {
+      return new HttpException(message, HttpStatus.BAD_REQUEST);
+    }
+
+    if (error instanceof HttpException) {
+      return error;
+    }
+
+    // Para otros errores, devolver 500
+    return new HttpException(
+      message || 'Error interno del servidor al procesar la reserva',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  }
+}

@@ -7,7 +7,9 @@ export class EmailService {
   constructor(private readonly mailerService: MailerService) {}
 
   async sendBookingConfirmation(booking: Booking): Promise<void> {
-    const { client, service, professional, date, time, notes } = booking;
+    const { client, services, totalPrice, professional, date, time, notes } =
+      booking;
+    const serviceNames = services.map((service) => service.name);
 
     const [year, month, day] = date.split('-');
     const dateForDisplay = new Date(
@@ -29,6 +31,13 @@ export class EmailService {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+
+    const servicesBlock = services
+      .map(
+        (service) =>
+          `<strong style="color:#1a1a2e;font-size:16px;display:block;">${escape(service.name)}</strong>`,
+      )
+      .join('');
 
     const notesBlock = notes
       ? `<tr>
@@ -72,8 +81,8 @@ export class EmailService {
               <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f9fa;border-radius:8px;">
                 <tr>
                   <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
-                    <span style="color:#6b7280;font-size:12px;">SERVICIO</span><br>
-                    <strong style="color:#1a1a2e;font-size:16px;">${escape(service.name)}</strong>
+                    <span style="color:#6b7280;font-size:12px;">${services.length > 1 ? 'SERVICIOS' : 'SERVICIO'}</span><br>
+                    ${servicesBlock}
                   </td>
                 </tr>
                 <tr>
@@ -97,7 +106,7 @@ export class EmailService {
                 <tr>
                   <td style="padding:16px 20px;${notesBlock ? 'border-bottom:1px solid #e5e7eb;' : ''}">
                     <span style="color:#6b7280;font-size:12px;">PRECIO</span><br>
-                    <strong style="color:#1a1a2e;font-size:16px;">$${service.price.toLocaleString('es-AR')}</strong>
+                    <strong style="color:#1a1a2e;font-size:16px;">$${totalPrice.toLocaleString('es-AR')}</strong>
                   </td>
                 </tr>
                 ${notesBlock}
@@ -127,7 +136,7 @@ export class EmailService {
 
     await this.mailerService.sendMail({
       to: client.email,
-      subject: `Confirmación de reserva — ${service.name}`,
+      subject: `Confirmación de reserva — ${serviceNames.join(', ')}`,
       html,
     });
   }
