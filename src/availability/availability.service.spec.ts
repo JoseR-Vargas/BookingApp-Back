@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CatalogService } from '../catalog/catalog.service';
+import { createFakeCatalog } from '../catalog/catalog.testing';
 import { Booking } from '../bookings/schemas/booking.schema';
 import { AvailabilityService } from './availability.service';
 
@@ -22,6 +23,7 @@ const times = (first: string, last: string): string[] => {
 
 describe('AvailabilityService', () => {
   let service: AvailabilityService;
+  let fake: ReturnType<typeof createFakeCatalog>;
   let bookings: unknown[];
   const exec = jest.fn(() => Promise.resolve(bookings));
   const lean = jest.fn(() => ({ exec }));
@@ -30,10 +32,12 @@ describe('AvailabilityService', () => {
   beforeEach(async () => {
     bookings = [];
     jest.clearAllMocks();
+    fake = createFakeCatalog();
+    await fake.catalog.onModuleInit();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AvailabilityService,
-        CatalogService,
+        { provide: CatalogService, useValue: fake.catalog },
         { provide: getModelToken(Booking.name), useValue: bookingModel },
       ],
     }).compile();
@@ -192,16 +196,9 @@ describe('AvailabilityService', () => {
   });
 
   it('only lists professionals offering ALL the services', async () => {
-    const catalog = (service as unknown as { catalogService: CatalogService })
-      .catalogService;
-    const base = catalog.findService('servicio-basico')!;
-    jest
-      .spyOn(catalog, 'findService')
-      .mockImplementation((id) =>
-        id === 'servicio-premium'
-          ? { ...base, id, professionals: ['maria-lopez'] }
-          : base,
-      );
+    fake.serviceModel.docs.find(
+      (d) => d.id === 'servicio-premium',
+    )!.professionals = ['maria-lopez'];
 
     const result = await service.getAvailability('2026-10-19', [
       'servicio-basico',

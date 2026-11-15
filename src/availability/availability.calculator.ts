@@ -26,7 +26,8 @@ export function dayOfWeekFromIsoDate(value: string): DayOfWeek | null {
   return date.getUTCDay() as DayOfWeek;
 }
 
-function toMinutes(time: string): number | null {
+/** Minutes since midnight of an 'H:mm' / 'HH:mm' time, or null if invalid. */
+export function toMinutes(time: string): number | null {
   const match = TIME.exec(time ?? '');
   if (!match) {
     return null;
@@ -54,12 +55,13 @@ export function buildDaySlots(
   if (day.closed) {
     return [];
   }
+  const open = toMinutes(day.open);
+  const close = toMinutes(day.close);
+  if (open === null || close === null) {
+    return [];
+  }
   const slots: string[] = [];
-  for (
-    let start = day.open * 60;
-    start < day.close * 60;
-    start += schedule.slotIntervalMinutes
-  ) {
+  for (let start = open; start < close; start += schedule.slotIntervalMinutes) {
     slots.push(toTime(start));
   }
   return slots;

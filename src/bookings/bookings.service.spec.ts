@@ -6,6 +6,7 @@ import { Booking } from './schemas/booking.schema';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { EmailService } from '../email/email.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { createFakeCatalog } from '../catalog/catalog.testing';
 import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
 import { Service } from '../catalog/catalog.config';
 
@@ -124,15 +125,17 @@ describe('BookingsService', () => {
     notifyNewBooking: jest.fn(),
   };
 
-  // Real catalog logic over a controlled service list.
-  const mockCatalogService = new CatalogService();
-  jest
-    .spyOn(mockCatalogService, 'findService')
-    .mockImplementation((id) => SERVICES.find((s) => s.id === id));
+  // Real catalog logic over in-memory models with a controlled service list.
+  let mockCatalogService: CatalogService;
 
   const savedDoc = () => mockBookingModel.mock.calls[0][0];
 
   beforeEach(async () => {
+    const fake = createFakeCatalog({
+      services: SERVICES.map((s) => ({ ...s, active: true })),
+    });
+    mockCatalogService = fake.catalog;
+    await mockCatalogService.onModuleInit();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BookingsService,

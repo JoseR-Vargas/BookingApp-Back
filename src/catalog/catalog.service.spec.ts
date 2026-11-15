@@ -1,22 +1,96 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { SERVICES } from './catalog.config';
 import { CatalogService } from './catalog.service';
+import { createFakeCatalog } from './catalog.testing';
 import { ServiceSelectionError } from './service-selection';
 
 describe('CatalogService', () => {
   let service: CatalogService;
+  let fake: ReturnType<typeof createFakeCatalog>;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [CatalogService],
-    }).compile();
+    fake = createFakeCatalog();
+    service = fake.catalog;
+    await service.onModuleInit();
+  });
 
-    service = module.get<CatalogService>(CatalogService);
+  describe('seed (onModuleInit)', () => {
+    it('inserts the config defaults into the three collections', () => {
+      expect(fake.professionalModel.docs.map((d) => d.id)).toEqual([
+        'alex-garcia',
+        'maria-lopez',
+      ]);
+      expect(fake.serviceModel.docs.map((d) => d.id)).toEqual([
+        'consulta-inicial',
+        'servicio-basico',
+        'servicio-premium',
+        'sesion-expres',
+      ]);
+      expect(fake.settingsModel.docs).toHaveLength(1);
+      expect(fake.settingsModel.docs[0]).toMatchObject({
+        key: 'schedule',
+        slotIntervalMinutes: 30,
+      });
+      expect(fake.professionalModel.docs[0].active).toBe(true);
+    });
+
+    it('is idempotent and never overwrites admin edits', async () => {
+      fake.professionalModel.docs[0].name = 'Edited Name';
+      fake.serviceModel.docs[1].price = 9999;
+      fake.serviceModel.docs[2].active = false;
+      fake.settingsModel.docs[0].weekly[0] = {
+        closed: false,
+        open: '10:00',
+        close: '12:00',
+      };
+
+      await service.onModuleInit();
+
+      expect(fake.professionalModel.docs).toHaveLength(2);
+      expect(fake.serviceModel.docs).toHaveLength(4);
+      expect(fake.settingsModel.docs).toHaveLength(1);
+      expect(fake.professionalModel.docs[0].name).toBe('Edited Name');
+      expect(fake.serviceModel.docs[1].price).toBe(9999);
+      expect(fake.serviceModel.docs[2].active).toBe(false);
+      expect(fake.settingsModel.docs[0].weekly[0].open).toBe('10:00');
+    });
+
+    it('re-adds a missing default item without touching the others', async () => {
+      fake.serviceModel.docs.splice(0, 1);
+      fake.serviceModel.docs[0].price = 1;
+
+      await service.onModuleInit();
+
+      expect(fake.serviceModel.docs.map((d) => d.id).sort()).toEqual([
+        'consulta-inicial',
+        'servicio-basico',
+        'servicio-premium',
+        'sesion-expres',
+      ]);
+      expect(
+        fake.serviceModel.docs.find((d) => d.id === 'servicio-basico')?.price,
+      ).toBe(1);
+    });
+
+    it('tolerates a duplicate key error from a concurrent instance', async () => {
+      const duplicate = Object.assign(new Error('E11000'), { code: 11000 });
+      fake.professionalModel.updateOne.mockImplementationOnce(() => ({
+        exec: () => Promise.reject(duplicate),
+      }));
+
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
+    });
+
+    it('rethrows other database errors', async () => {
+      fake.serviceModel.updateOne.mockImplementationOnce(() => ({
+        exec: () => Promise.reject(new Error('connection lost')),
+      }));
+
+      await expect(service.onModuleInit()).rejects.toThrow('connection lost');
+    });
   });
 
   describe('getCatalog', () => {
-    it('returns both professionals', () => {
-      const { professionals } = service.getCatalog();
+    it('returns both professionals', async () => {
+      const { professionals } = await service.getCatalog();
 
       expect(professionals.map((p) => p.id)).toEqual([
         'alex-garcia',
@@ -33,8 +107,8 @@ describe('CatalogService', () => {
       });
     });
 
-    it('returns the 4 services with their exact ids and durations', () => {
-      const { services } = service.getCatalog();
+    it('returns the 4 services with their exact ids and durations', async () => {
+      const { services } = await service.getCatalog();
 
       expect(services.map((s) => [s.id, s.duration])).toEqual([
         ['consulta-inicial', 30],
@@ -54,16 +128,20 @@ describe('CatalogService', () => {
       });
     });
 
-    it('returns a weekly schedule: Sunday closed, Saturday 9-18, weekdays 9-20', () => {
-      const { schedule } = service.getCatalog();
+    it('returns a weekly schedule: Sunday closed, Saturday 9-18, weekdays 9-20', async () => {
+      const { schedule } = await service.getCatalog();
 
       expect(schedule.weekly[0]).toEqual({ closed: true });
-      expect(schedule.weekly[6]).toEqual({ closed: false, open: 9, close: 18 });
+      expect(schedule.weekly[6]).toEqual({
+        closed: false,
+        open: '09:00',
+        close: '18:00',
+      });
       for (const day of [1, 2, 3, 4, 5] as const) {
         expect(schedule.weekly[day]).toEqual({
           closed: false,
-          open: 9,
-          close: 20,
+          open: '09:00',
+          close: '20:00',
         });
       }
       expect(schedule.slotIntervalMinutes).toBe(30);
@@ -72,31 +150,98 @@ describe('CatalogService', () => {
         'weekly',
       ]);
     });
+
+    it('hides inactive professionals and services and leaks no internal fields', async () => {
+      fake.professionalModel.docs[1].active = false;
+      fake.serviceModel.docs[0].active = false;
+
+      const { professionals, services } = await service.getCatalog();
+
+      expect(professionals.map((p) => p.id)).toEqual(['alex-garcia']);
+      expect(services.map((s) => s.id)).toEqual([
+        'servicio-basico',
+        'servicio-premium',
+        'sesion-expres',
+      ]);
+      for (const item of [...professionals, ...services]) {
+        expect(item).not.toHaveProperty('active');
+        expect(item).not.toHaveProperty('_id');
+      }
+      // Services only list professionals that are still active.
+      expect(services[0].professionals).toEqual(['alex-garcia']);
+    });
+
+    it('falls back to the default schedule when the settings document is missing', async () => {
+      fake.settingsModel.docs.splice(0, 1);
+
+      const { schedule } = await service.getCatalog();
+
+      expect(schedule.weekly[0]).toEqual({ closed: true });
+      expect(schedule.slotIntervalMinutes).toBe(30);
+    });
+  });
+
+  describe('getAdminCatalog', () => {
+    it('includes inactive items with their active flag', async () => {
+      fake.professionalModel.docs[1].active = false;
+      fake.serviceModel.docs[0].active = false;
+
+      const { professionals, services, schedule } =
+        await service.getAdminCatalog();
+
+      expect(professionals.map((p) => [p.id, p.active])).toEqual([
+        ['alex-garcia', true],
+        ['maria-lopez', false],
+      ]);
+      expect(services.map((s) => [s.id, s.active])).toEqual([
+        ['consulta-inicial', false],
+        ['servicio-basico', true],
+        ['servicio-premium', true],
+        ['sesion-expres', true],
+      ]);
+      expect(services[0].professionals).toEqual(['alex-garcia', 'maria-lopez']);
+      expect(professionals[0]).not.toHaveProperty('_id');
+      expect(schedule.slotIntervalMinutes).toBe(30);
+    });
   });
 
   describe('findService', () => {
-    it('returns the service when the id exists', () => {
-      expect(service.findService('sesion-expres')?.price).toBe(700);
+    it('returns the service when the id exists', async () => {
+      expect((await service.findService('sesion-expres'))?.price).toBe(700);
     });
 
-    it('returns undefined when the id does not exist', () => {
-      expect(service.findService('unknown')).toBeUndefined();
+    it('returns undefined when the id does not exist', async () => {
+      expect(await service.findService('unknown')).toBeUndefined();
+    });
+
+    it('returns undefined for an inactive service', async () => {
+      fake.serviceModel.docs[3].active = false;
+
+      expect(await service.findService('sesion-expres')).toBeUndefined();
     });
   });
 
   describe('findProfessional', () => {
-    it('returns the professional when the id exists', () => {
-      expect(service.findProfessional('maria-lopez')?.name).toBe('María López');
+    it('returns the professional when the id exists', async () => {
+      expect((await service.findProfessional('maria-lopez'))?.name).toBe(
+        'María López',
+      );
     });
 
-    it('returns undefined when the id does not exist', () => {
-      expect(service.findProfessional('unknown')).toBeUndefined();
+    it('returns undefined when the id does not exist', async () => {
+      expect(await service.findProfessional('unknown')).toBeUndefined();
+    });
+
+    it('returns undefined for an inactive professional', async () => {
+      fake.professionalModel.docs[1].active = false;
+
+      expect(await service.findProfessional('maria-lopez')).toBeUndefined();
     });
   });
 
   describe('resolveServices', () => {
-    it('resolves the services in the given order with accumulated totals', () => {
-      const selection = service.resolveServices([
+    it('resolves the services in the given order with accumulated totals', async () => {
+      const selection = await service.resolveServices([
         'servicio-premium',
         'consulta-inicial',
         'servicio-basico',
@@ -111,8 +256,8 @@ describe('CatalogService', () => {
       expect(selection.totalDuration).toBe(180);
     });
 
-    it('returns the professionals that offer every selected service', () => {
-      const selection = service.resolveServices([
+    it('returns the professionals that offer every selected service', async () => {
+      const selection = await service.resolveServices([
         'consulta-inicial',
         'sesion-expres',
       ]);
@@ -123,15 +268,10 @@ describe('CatalogService', () => {
       ]);
     });
 
-    it('keeps only professionals common to all services', () => {
-      jest.spyOn(service, 'findService').mockImplementation((id) => {
-        const base = SERVICES.find((s) => s.id === id)!;
-        return id === 'servicio-premium'
-          ? { ...base, professionals: ['maria-lopez'] }
-          : base;
-      });
+    it('keeps only professionals common to all services', async () => {
+      fake.serviceModel.docs[2].professionals = ['maria-lopez'];
 
-      const selection = service.resolveServices([
+      const selection = await service.resolveServices([
         'consulta-inicial',
         'servicio-premium',
       ]);
@@ -139,41 +279,54 @@ describe('CatalogService', () => {
       expect(selection.professionals.map((p) => p.id)).toEqual(['maria-lopez']);
     });
 
-    it('rejects an empty list', () => {
-      expect(() => service.resolveServices([])).toThrow(ServiceSelectionError);
-      expect(() => service.resolveServices([])).toThrow(
+    it('excludes inactive professionals', async () => {
+      fake.professionalModel.docs[0].active = false;
+
+      const selection = await service.resolveServices(['consulta-inicial']);
+
+      expect(selection.professionals.map((p) => p.id)).toEqual(['maria-lopez']);
+    });
+
+    it('treats an inactive service as unknown', async () => {
+      fake.serviceModel.docs[0].active = false;
+
+      await expect(
+        service.resolveServices(['consulta-inicial']),
+      ).rejects.toMatchObject({
+        failure: 'unknown',
+        serviceId: 'consulta-inicial',
+      });
+    });
+
+    it('rejects an empty list', async () => {
+      await expect(service.resolveServices([])).rejects.toThrow(
+        ServiceSelectionError,
+      );
+      await expect(service.resolveServices([])).rejects.toThrow(
         'debes seleccionar al menos un servicio',
       );
     });
 
-    it('rejects an unknown service id', () => {
-      expect.assertions(3);
-      try {
-        service.resolveServices(['consulta-inicial', 'unknown']);
-      } catch (error) {
-        expect(error).toBeInstanceOf(ServiceSelectionError);
-        expect((error as ServiceSelectionError).failure).toBe('unknown');
-        expect((error as ServiceSelectionError).serviceId).toBe('unknown');
-      }
+    it('rejects an unknown service id', async () => {
+      await expect(
+        service.resolveServices(['consulta-inicial', 'unknown']),
+      ).rejects.toMatchObject({ failure: 'unknown', serviceId: 'unknown' });
     });
 
-    it('rejects a duplicated service id', () => {
-      expect.assertions(2);
-      try {
-        service.resolveServices(['consulta-inicial', 'consulta-inicial']);
-      } catch (error) {
-        expect((error as ServiceSelectionError).failure).toBe('duplicate');
-        expect((error as ServiceSelectionError).serviceId).toBe(
-          'consulta-inicial',
-        );
-      }
+    it('rejects a duplicated service id', async () => {
+      await expect(
+        service.resolveServices(['consulta-inicial', 'consulta-inicial']),
+      ).rejects.toMatchObject({
+        failure: 'duplicate',
+        serviceId: 'consulta-inicial',
+      });
     });
   });
 
   describe('getProfessionalsForService', () => {
-    it('returns the professionals assigned to a known service', () => {
+    it('returns the professionals assigned to a known service', async () => {
       const professionals =
-        service.getProfessionalsForService('consulta-inicial');
+        await service.getProfessionalsForService('consulta-inicial');
 
       expect(professionals.map((p) => p.id)).toEqual([
         'alex-garcia',
@@ -181,8 +334,21 @@ describe('CatalogService', () => {
       ]);
     });
 
-    it('returns an empty list for an unknown service', () => {
-      expect(service.getProfessionalsForService('unknown')).toEqual([]);
+    it('returns only active professionals', async () => {
+      fake.professionalModel.docs[0].active = false;
+
+      const professionals =
+        await service.getProfessionalsForService('consulta-inicial');
+
+      expect(professionals.map((p) => p.id)).toEqual(['maria-lopez']);
+    });
+
+    it('returns an empty list for an unknown or inactive service', async () => {
+      expect(await service.getProfessionalsForService('unknown')).toEqual([]);
+      fake.serviceModel.docs[0].active = false;
+      expect(
+        await service.getProfessionalsForService('consulta-inicial'),
+      ).toEqual([]);
     });
   });
 });

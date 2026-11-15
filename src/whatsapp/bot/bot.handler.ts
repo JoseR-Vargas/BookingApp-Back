@@ -166,7 +166,7 @@ export class BotHandler extends WhatsappMessageHandler {
     const { kind, value } = reply;
     switch (step) {
       case 'choose_service':
-        if (kind === 'svc' && this.catalog.findService(value)) {
+        if (kind === 'svc' && (await this.catalog.findService(value))) {
           return this.promptDay(ctx, { serviceId: value });
         }
         break;
@@ -187,7 +187,7 @@ export class BotHandler extends WhatsappMessageHandler {
         }
         break;
       case 'choose_professional':
-        if (kind === 'pro' && this.catalog.findProfessional(value)) {
+        if (kind === 'pro' && (await this.catalog.findProfessional(value))) {
           return this.promptConfirm(ctx, { ...data, professionalId: value });
         }
         break;
@@ -221,9 +221,8 @@ export class BotHandler extends WhatsappMessageHandler {
   }
 
   private async promptService(ctx: Context, prefix?: string): Promise<void> {
-    const rows: ListRow[] = this.catalog
-      .getCatalog()
-      .services.slice(0, MAX_LIST_ROWS)
+    const rows: ListRow[] = (await this.catalog.getCatalog()).services
+      .slice(0, MAX_LIST_ROWS)
       .map((service) => ({
         id: `svc:${service.id}`,
         title: service.name,
@@ -354,7 +353,7 @@ export class BotHandler extends WhatsappMessageHandler {
     await this.states.save(ctx.phone, 'confirm', { ...data });
     await this.client.sendInteractiveButtons(
       ctx.phone,
-      confirmPrompt(this.summary(data)),
+      confirmPrompt(await this.summary(data)),
       [
         { id: 'confirm:yes', title: MESSAGES.confirmButtons.yes },
         { id: 'confirm:no', title: MESSAGES.confirmButtons.no },
@@ -367,7 +366,9 @@ export class BotHandler extends WhatsappMessageHandler {
     data: BotData,
     message: InboundMessage,
   ): Promise<void> {
-    const professional = this.catalog.findProfessional(data.professionalId!)!;
+    const professional = (await this.catalog.findProfessional(
+      data.professionalId!,
+    ))!;
     try {
       await this.bookings.create({
         client: {
@@ -395,7 +396,10 @@ export class BotHandler extends WhatsappMessageHandler {
     // Clear first: if the confirmation text fails to send, the booking exists
     // and the user must not be able to confirm it a second time.
     await this.states.clear(ctx.phone);
-    await this.client.sendText(ctx.phone, bookingConfirmed(this.summary(data)));
+    await this.client.sendText(
+      ctx.phone,
+      bookingConfirmed(await this.summary(data)),
+    );
   }
 
   private async cancel(ctx: Context): Promise<void> {
@@ -403,9 +407,11 @@ export class BotHandler extends WhatsappMessageHandler {
     await this.client.sendText(ctx.phone, MESSAGES.goodbye);
   }
 
-  private summary(data: BotData): BookingSummary {
-    const service = this.catalog.findService(data.serviceId!)!;
-    const professional = this.catalog.findProfessional(data.professionalId!);
+  private async summary(data: BotData): Promise<BookingSummary> {
+    const service = (await this.catalog.findService(data.serviceId!))!;
+    const professional = await this.catalog.findProfessional(
+      data.professionalId!,
+    );
     return {
       service: service.name,
       date: data.date!,

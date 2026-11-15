@@ -1,0 +1,103 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
+import { AdminKeyGuard } from '../auth/admin-key.guard';
+import { CatalogAdminService } from '../catalog/catalog-admin.service';
+import {
+  parseProfessionalCreate,
+  parseProfessionalUpdate,
+  parseServiceCreate,
+  parseServiceUpdate,
+  parseWeeklySchedule,
+} from '../catalog/catalog-validation';
+import { WeeklySchedule } from '../catalog/catalog.config';
+import {
+  AdminCatalog,
+  AdminProfessional,
+  AdminService,
+  CatalogService,
+} from '../catalog/catalog.service';
+import { ScheduleImpactService, currentBusinessDate } from './schedule-impact';
+
+/** Business configuration endpoints, all behind the admin key. */
+@Controller('admin')
+@UseGuards(AdminKeyGuard)
+export class AdminController {
+  constructor(
+    private readonly catalog: CatalogService,
+    private readonly catalogAdmin: CatalogAdminService,
+    private readonly scheduleImpact: ScheduleImpactService,
+  ) {}
+
+  @Get('catalog')
+  getCatalog(): Promise<AdminCatalog> {
+    return this.catalog.getAdminCatalog();
+  }
+
+  @Post('professionals')
+  async createProfessional(@Body() body: unknown): Promise<AdminProfessional> {
+    return this.catalogAdmin.createProfessional(parseProfessionalCreate(body));
+  }
+
+  @Patch('professionals/:id')
+  async updateProfessional(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<AdminProfessional> {
+    return this.catalogAdmin.updateProfessional(
+      id,
+      parseProfessionalUpdate(body),
+    );
+  }
+
+  /** Soft delete: the professional stays in the database, inactive. */
+  @Delete('professionals/:id')
+  deleteProfessional(@Param('id') id: string): Promise<AdminProfessional> {
+    return this.catalogAdmin.updateProfessional(id, { active: false });
+  }
+
+  @Post('services')
+  async createService(@Body() body: unknown): Promise<AdminService> {
+    return this.catalogAdmin.createService(parseServiceCreate(body));
+  }
+
+  @Patch('services/:id')
+  async updateService(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<AdminService> {
+    return this.catalogAdmin.updateService(id, parseServiceUpdate(body));
+  }
+
+  /** Soft delete: the service stays in the database, inactive. */
+  @Delete('services/:id')
+  deleteService(@Param('id') id: string): Promise<AdminService> {
+    return this.catalogAdmin.updateService(id, { active: false });
+  }
+
+  /**
+   * Saves the weekly schedule. Upcoming bookings it leaves out of hours never
+   * block the save; they are only counted so the UI can warn the admin.
+   */
+  @Put('schedule')
+  async saveSchedule(
+    @Body() body: unknown,
+  ): Promise<{ schedule: WeeklySchedule; affectedBookings: number }> {
+    const schedule = await this.catalogAdmin.saveSchedule(
+      parseWeeklySchedule(body),
+    );
+    const affectedBookings = await this.scheduleImpact.countAffected(
+      schedule,
+      currentBusinessDate(),
+    );
+    return { schedule, affectedBookings };
+  }
+}

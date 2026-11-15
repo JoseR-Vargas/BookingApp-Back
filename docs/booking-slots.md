@@ -2,8 +2,11 @@
 
 ## Rule
 
-- Start times are every 30 minutes (`09:00`, `09:30`, ...), inside the opening hours
-  (`SCHEDULE` in `src/catalog/catalog.config.ts`): Mon-Fri 09-20, Sat 09-18, Sun closed.
+- Start times are every 30 minutes (`09:00`, `09:30`, ...), inside the opening hours. The hours
+  are stored per weekday as `HH:mm` strings in the `business_settings` collection and edited
+  from the admin panel (`PUT /api/admin/schedule`). `SCHEDULE` in
+  `src/catalog/catalog.config.ts` is only the seed used when the collection is empty:
+  Mon-Fri 09:00-20:00, Sat 09:00-18:00, Sun closed.
 - A booking occupies `ceil(totalDuration / 30)` consecutive 30-minute blocks from its start.
   The blocks are stored in `booking.slots`.
 - There is no gap between bookings: a booking that ends exactly at `:00` or `:30` frees that

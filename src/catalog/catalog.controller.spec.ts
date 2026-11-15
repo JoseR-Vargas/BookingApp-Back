@@ -5,7 +5,7 @@ import { CatalogService } from './catalog.service';
 describe('CatalogController', () => {
   let controller: CatalogController;
   const catalog = { professionals: [], services: [], schedule: {} };
-  const catalogService = { getCatalog: jest.fn().mockReturnValue(catalog) };
+  const catalogService = { getCatalog: jest.fn().mockResolvedValue(catalog) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -16,8 +16,8 @@ describe('CatalogController', () => {
     controller = module.get<CatalogController>(CatalogController);
   });
 
-  it('returns the catalog from the service', () => {
-    expect(controller.getCatalog()).toBe(catalog);
+  it('returns the catalog from the service', async () => {
+    await expect(controller.getCatalog()).resolves.toBe(catalog);
     expect(catalogService.getCatalog).toHaveBeenCalled();
   });
 });

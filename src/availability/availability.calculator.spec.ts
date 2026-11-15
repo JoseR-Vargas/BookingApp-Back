@@ -1,4 +1,4 @@
-import { SCHEDULE } from '../catalog/catalog.config';
+import { SCHEDULE, WeeklySchedule } from '../catalog/catalog.config';
 import {
   buildDaySlots,
   dayOfWeekFromIsoDate,
@@ -61,6 +61,37 @@ describe('availability.calculator', () => {
 
     it('offers 13:00 as a regular slot', () => {
       expect(buildDaySlots(3, SCHEDULE)).toContain('13:00');
+    });
+
+    it('stores the seeded schedule as HH:mm strings', () => {
+      expect(SCHEDULE.weekly[1]).toEqual({
+        closed: false,
+        open: '09:00',
+        close: '20:00',
+      });
+      expect(SCHEDULE.weekly[6]).toEqual({
+        closed: false,
+        open: '09:00',
+        close: '18:00',
+      });
+    });
+
+    it('supports half-hour opening and closing times', () => {
+      const schedule: WeeklySchedule = {
+        weekly: {
+          ...SCHEDULE.weekly,
+          2: { closed: false, open: '09:30', close: '12:00' },
+        },
+        slotIntervalMinutes: 30,
+      };
+
+      expect(buildDaySlots(2, schedule)).toEqual([
+        '09:30',
+        '10:00',
+        '10:30',
+        '11:00',
+        '11:30',
+      ]);
     });
   });
 

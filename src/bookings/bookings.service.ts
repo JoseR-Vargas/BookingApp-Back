@@ -241,10 +241,14 @@ export class BookingsService {
     serviceIds: string[],
   ): Promise<{ available: boolean }> {
     try {
-      const selection = this.catalogService.resolveServices(
+      const selection = await this.catalogService.resolveServices(
         Array.isArray(serviceIds) ? serviceIds : [],
       );
-      const slots = this.windowSlotsFor(date, time, selection.totalDuration);
+      const slots = await this.windowSlotsFor(
+        date,
+        time,
+        selection.totalDuration,
+      );
       const offersAll = selection.professionals.some(
         (professional) => professional.id === professionalId,
       );
@@ -319,12 +323,14 @@ export class BookingsService {
     request: ScheduleRequest,
     excludeId?: string,
   ): Promise<ResolvedSchedule> {
-    const selection = this.catalogService.resolveServices(request.serviceIds);
-    const professional = this.resolveProfessional(
+    const selection = await this.catalogService.resolveServices(
+      request.serviceIds,
+    );
+    const professional = await this.resolveProfessional(
       request.professionalId,
       selection,
     );
-    const slots = this.resolveWindow(request, selection);
+    const slots = await this.resolveWindow(request, selection);
 
     const occupied = await this.occupiedSlotsFor(
       request.date,
@@ -347,11 +353,11 @@ export class BookingsService {
   }
 
   /** The professional must exist and offer every selected service. */
-  private resolveProfessional(
+  private async resolveProfessional(
     professionalId: string | undefined,
     selection: ServiceSelection,
   ) {
-    const professional = this.catalogService.findProfessional(
+    const professional = await this.catalogService.findProfessional(
       professionalId ?? '',
     );
     if (!professional) {
@@ -373,14 +379,18 @@ export class BookingsService {
   }
 
   /** Slots of the whole service block, which must fit in the day schedule. */
-  private resolveWindow(
+  private async resolveWindow(
     { date, time }: ScheduleRequest,
     selection: ServiceSelection,
-  ): string[] {
+  ): Promise<string[]> {
     if (dayOfWeekFromIsoDate(date) === null) {
       throw new Error(`Error de validación: la fecha ${date} no es válida`);
     }
-    const slots = this.windowSlotsFor(date, time, selection.totalDuration);
+    const slots = await this.windowSlotsFor(
+      date,
+      time,
+      selection.totalDuration,
+    );
     if (!slots) {
       const names = selection.services
         .map((service) => service.name)
@@ -393,16 +403,16 @@ export class BookingsService {
   }
 
   /** Consecutive slots a block of `totalDuration` minutes needs, or null. */
-  private windowSlotsFor(
+  private async windowSlotsFor(
     date: string,
     time: string,
     totalDuration: number,
-  ): string[] | null {
+  ): Promise<string[] | null> {
     const dayOfWeek = dayOfWeekFromIsoDate(date);
     if (dayOfWeek === null) {
       return null;
     }
-    const { schedule } = this.catalogService.getCatalog();
+    const schedule = await this.catalogService.getSchedule();
     const interval = schedule.slotIntervalMinutes;
     return windowSlots(
       buildDaySlots(dayOfWeek, schedule),

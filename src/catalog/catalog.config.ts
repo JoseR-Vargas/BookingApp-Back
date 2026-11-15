@@ -23,7 +23,8 @@ export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export type DaySchedule =
   | { closed: true }
-  | { closed: false; open: number; close: number };
+  /** `open` and `close` are 'HH:mm' wall-clock strings; `close` is exclusive. */
+  | { closed: false; open: string; close: string };
 
 export interface WeeklySchedule {
   weekly: Record<DayOfWeek, DaySchedule>;
@@ -97,7 +98,7 @@ export const SERVICES: Service[] = [
   },
 ];
 
-const WEEKDAY: DaySchedule = { closed: false, open: 9, close: 20 };
+const WEEKDAY: DaySchedule = { closed: false, open: '09:00', close: '20:00' };
 
 export const SCHEDULE: WeeklySchedule = {
   weekly: {
@@ -107,7 +108,7 @@ export const SCHEDULE: WeeklySchedule = {
     3: WEEKDAY,
     4: WEEKDAY,
     5: WEEKDAY,
-    6: { closed: false, open: 9, close: 18 },
+    6: { closed: false, open: '09:00', close: '18:00' },
   },
   slotIntervalMinutes: 30,
 };
