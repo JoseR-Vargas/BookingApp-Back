@@ -4,6 +4,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Booking } from '../bookings/schemas/booking.schema';
 import { BookingsModule } from '../bookings/bookings.module';
 import { BookingsService } from '../bookings/bookings.service';
+import { BusinessSettingsRecord } from '../catalog/schemas/business-settings.schema';
+import { ProfessionalRecord } from '../catalog/schemas/professional.schema';
+import { ServiceRecord } from '../catalog/schemas/service.schema';
 import { BotHandler } from './bot/bot.handler';
 import { ConversationState } from './schemas/conversation-state.schema';
 import { ProcessedMessage } from './schemas/processed-message.schema';
@@ -44,6 +47,12 @@ describe('WhatsappModule wiring (no WHATSAPP_* / BUSINESS_TIMEZONE env)', () => 
       .overrideProvider(getModelToken(ProcessedMessage.name))
       .useValue({})
       .overrideProvider(getModelToken(ConversationState.name))
+      .useValue({})
+      .overrideProvider(getModelToken(ProfessionalRecord.name))
+      .useValue({})
+      .overrideProvider(getModelToken(ServiceRecord.name))
+      .useValue({})
+      .overrideProvider(getModelToken(BusinessSettingsRecord.name))
       .useValue({})
       .compile();
   }, 30000);

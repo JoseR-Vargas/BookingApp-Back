@@ -8,6 +8,8 @@ import { EmailModule } from './email/email.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     CatalogModule,
     AvailabilityModule,
     WhatsappModule,
+    AuthModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

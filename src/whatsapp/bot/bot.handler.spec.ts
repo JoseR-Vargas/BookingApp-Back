@@ -9,6 +9,7 @@ import {
 import { Availability } from '../../availability/availability.service';
 import { SCHEDULE } from '../../catalog/catalog.config';
 import { CatalogService } from '../../catalog/catalog.service';
+import { createSeededCatalogService } from '../../catalog/catalog.testing';
 import { InboundMessage } from '../whatsapp.types';
 import { BotHandler } from './bot.handler';
 
@@ -66,13 +67,15 @@ describe('BotHandler', () => {
   };
   const bookings = { create: jest.fn() };
 
+  let catalog: CatalogService;
+
   /** Same output shape as AvailabilityService with no bookings at all. */
-  const openAvailability = (
+  const openAvailability = async (
     date: string,
     serviceIds: string[],
   ): Promise<Availability> => {
     const { services, professionals, totalDuration } =
-      new CatalogService().resolveServices(serviceIds);
+      await catalog.resolveServices(serviceIds);
     const dayOfWeek = dayOfWeekFromIsoDate(date) as 0;
     const daySlots = buildDaySlots(dayOfWeek, SCHEDULE);
     const slots = freeStartTimes(
@@ -81,7 +84,7 @@ describe('BotHandler', () => {
       slotsRequired(totalDuration, SCHEDULE.slotIntervalMinutes),
       SCHEDULE.slotIntervalMinutes,
     );
-    return Promise.resolve({
+    return {
       date,
       closed: daySlots.length === 0,
       services: services.map(({ id, name, duration }) => ({
@@ -95,7 +98,7 @@ describe('BotHandler', () => {
         name: p.name,
         slots: [...slots],
       })),
-    } satisfies Availability);
+    } satisfies Availability;
   };
   const availability = { getAvailability: jest.fn(openAvailability) };
 
@@ -104,7 +107,8 @@ describe('BotHandler', () => {
   const rowIds = (call: unknown[]) =>
     (call[3] as { id: string }[]).map((row) => row.id);
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    catalog = await createSeededCatalogService();
     jest.useFakeTimers({ now: MONDAY_10AM });
     jest.clearAllMocks();
     availability.getAvailability.mockImplementation(openAvailability);
@@ -114,7 +118,7 @@ describe('BotHandler', () => {
     handler = new BotHandler(
       client as never,
       states as never,
-      new CatalogService(),
+      catalog,
       availability as never,
       bookings as never,
       { get: (key: string) => env[key] } as unknown as ConfigService,

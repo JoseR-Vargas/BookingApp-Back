@@ -49,9 +49,9 @@ export class AvailabilityService {
       throw new BadRequestException('date must be a valid YYYY-MM-DD date');
     }
     const { services, professionals, totalDuration } =
-      this.catalogService.resolveServices(serviceIds);
+      await this.catalogService.resolveServices(serviceIds);
 
-    const { schedule } = this.catalogService.getCatalog();
+    const schedule = await this.catalogService.getSchedule();
     const daySlots = buildDaySlots(dayOfWeek, schedule);
     const closed = daySlots.length === 0;
     const bookings = closed
