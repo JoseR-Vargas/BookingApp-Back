@@ -96,4 +96,38 @@ describe('BookingsGateway', () => {
       expect(mockEmit).toHaveBeenCalledWith('newBooking', fullBooking);
     });
   });
+
+  describe('notifyBookingCancelled', () => {
+    it('emits bookingCancelled with only the id and the status', () => {
+      const mockEmit = jest.fn();
+      gateway.server = { emit: mockEmit } as any;
+
+      gateway.notifyBookingCancelled('507f1f77bcf86cd799439011');
+
+      expect(mockEmit).toHaveBeenCalledTimes(1);
+      expect(mockEmit).toHaveBeenCalledWith('bookingCancelled', {
+        id: '507f1f77bcf86cd799439011',
+        status: 'cancelled',
+      });
+    });
+
+    it('does not fail when there is no server', () => {
+      gateway.server = null as any;
+
+      expect(() => gateway.notifyBookingCancelled('123')).not.toThrow();
+    });
+
+    it('does not fail when server.emit throws', () => {
+      gateway.server = {
+        emit: jest.fn().mockImplementation(() => {
+          throw new Error('Socket error');
+        }),
+      } as any;
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      expect(() => gateway.notifyBookingCancelled('123')).not.toThrow();
+
+      consoleSpy.mockRestore();
+    });
+  });
 });

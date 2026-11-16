@@ -1,3 +1,8 @@
+import {
+  ConflictException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { BookingsService } from './bookings.service';
@@ -9,6 +14,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { createFakeCatalog } from '../catalog/catalog.testing';
 import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
 import { Service } from '../catalog/catalog.config';
+import { generateCancelToken, hashCancelToken } from './cancellation';
 
 const SERVICES: Service[] = [
   {
@@ -85,6 +91,9 @@ const mockBooking = {
   updatedAt: '2026-03-21T10:00:00.000Z',
 };
 
+/** What `create` returns: the booking plus the one-time cancel token. */
+const createdBooking = { ...mockBooking, cancelToken: expect.any(String) };
+
 /** A Mongoose query stub supporting both `.exec()` and `.lean().exec()`. */
 const query = (value: unknown) => ({
   exec: jest.fn().mockResolvedValue(value),
@@ -110,19 +119,23 @@ describe('BookingsService', () => {
   mockBookingModel.findByIdAndUpdate = jest.fn();
   mockBookingModel.findByIdAndDelete = jest.fn();
   mockBookingModel.findOne = jest.fn();
+  mockBookingModel.findOneAndUpdate = jest.fn();
   mockBookingModel.countDocuments = jest.fn();
   mockBookingModel.aggregate = jest.fn();
 
   const mockGateway = {
     notifyNewBooking: jest.fn(),
+    notifyBookingCancelled: jest.fn(),
   };
 
   const mockEmailService = {
     sendBookingConfirmation: jest.fn(),
+    sendCancellationConfirmation: jest.fn(),
   };
 
   const mockAdminNotifier = {
     notifyNewBooking: jest.fn(),
+    notifyCancelledBooking: jest.fn(),
   };
 
   // Real catalog logic over in-memory models with a controlled service list.
@@ -157,8 +170,11 @@ describe('BookingsService', () => {
     mockBookingModel.aggregate.mockResolvedValue([{ _id: null, total: 5000 }]);
     mockSave.mockResolvedValue(mockBooking);
     mockGateway.notifyNewBooking.mockImplementation(() => undefined);
+    mockGateway.notifyBookingCancelled.mockImplementation(() => undefined);
     mockEmailService.sendBookingConfirmation.mockResolvedValue(undefined);
+    mockEmailService.sendCancellationConfirmation.mockResolvedValue(undefined);
     mockAdminNotifier.notifyNewBooking.mockResolvedValue(undefined);
+    mockAdminNotifier.notifyCancelledBooking.mockResolvedValue(undefined);
   });
 
   it('debería estar definido', () => {
@@ -169,11 +185,78 @@ describe('BookingsService', () => {
     it('debería crear una reserva exitosamente', async () => {
       const result = await service.create(mockBookingDto);
 
-      expect(result).toEqual(mockBooking);
+      expect(result).toEqual(createdBooking);
       expect(mockGateway.notifyNewBooking).toHaveBeenCalledWith(mockBooking);
       expect(mockEmailService.sendBookingConfirmation).toHaveBeenCalledWith(
         mockBooking,
+        result.cancelToken,
       );
+    });
+
+    describe('cancel token', () => {
+      // A saved Mongoose document still carries the hash even with select:false.
+      const HASH_IN_DOC = 'f'.repeat(64);
+      const savedDocument = () => ({
+        ...mockBooking,
+        cancelTokenHash: HASH_IN_DOC,
+        toObject() {
+          const { toObject: _omit, ...plain } = this as Record<string, unknown>;
+          return plain;
+        },
+      });
+
+      beforeEach(() => {
+        mockSave.mockResolvedValue(savedDocument());
+      });
+
+      it('stores only the SHA-256 hash of the token, never the token', async () => {
+        const { cancelToken } = await service.create(mockBookingDto);
+
+        const doc = savedDoc();
+        expect(doc.cancelTokenHash).toBe(hashCancelToken(cancelToken));
+        expect(doc.cancelTokenHash).toMatch(/^[0-9a-f]{64}$/);
+        expect(JSON.stringify(doc)).not.toContain(cancelToken);
+      });
+
+      it('returns a 43 character token and no hash', async () => {
+        const result = await service.create(mockBookingDto);
+
+        expect(result.cancelToken).toEqual(expect.any(String));
+        expect(result.cancelToken).toHaveLength(43);
+        expect(result).not.toHaveProperty('cancelTokenHash');
+        expect(JSON.stringify(result)).not.toContain(HASH_IN_DOC);
+      });
+
+      it('generates a different token for every booking', async () => {
+        const first = await service.create(mockBookingDto);
+        const second = await service.create(mockBookingDto);
+
+        expect(first.cancelToken).not.toBe(second.cancelToken);
+      });
+
+      it('gives the confirmation email the token as its own argument', async () => {
+        const { cancelToken } = await service.create(mockBookingDto);
+
+        const [booking, token] =
+          mockEmailService.sendBookingConfirmation.mock.calls[0];
+        expect(token).toBe(cancelToken);
+        expect(booking).not.toHaveProperty('cancelToken');
+      });
+
+      it('never hands the hash or the token to the socket, the email or the admin notifier', async () => {
+        const { cancelToken } = await service.create(mockBookingDto);
+
+        const sent = [
+          mockGateway.notifyNewBooking.mock.calls[0][0],
+          mockEmailService.sendBookingConfirmation.mock.calls[0][0],
+          mockAdminNotifier.notifyNewBooking.mock.calls[0][0],
+        ];
+        for (const booking of sent) {
+          expect(booking).not.toHaveProperty('cancelTokenHash');
+          expect(JSON.stringify(booking)).not.toContain(HASH_IN_DOC);
+          expect(JSON.stringify(booking)).not.toContain(cancelToken);
+        }
+      });
     });
 
     it('debería guardar los slots calculados y los datos del catálogo', async () => {
@@ -307,7 +390,7 @@ describe('BookingsService', () => {
 
       const result = await service.create(dtoSinEmail);
 
-      expect(result).toEqual(sinEmail);
+      expect(result).toEqual({ ...sinEmail, cancelToken: expect.any(String) });
       expect(mockEmailService.sendBookingConfirmation).not.toHaveBeenCalled();
       expect(mockGateway.notifyNewBooking).toHaveBeenCalledWith(sinEmail);
     });
@@ -543,7 +626,7 @@ describe('BookingsService', () => {
 
       const result = await service.create(mockBookingDto);
 
-      expect(result).toEqual(mockBooking);
+      expect(result).toEqual(createdBooking);
     });
 
     it('debería guardar la reserva aún si el email falla', async () => {
@@ -553,7 +636,7 @@ describe('BookingsService', () => {
 
       const result = await service.create(mockBookingDto);
 
-      expect(result).toEqual(mockBooking);
+      expect(result).toEqual(createdBooking);
     });
 
     it('debería manejar errores de validación de Mongoose', async () => {
@@ -605,7 +688,7 @@ describe('BookingsService', () => {
         mockAdminNotifier.notifyNewBooking.mockRejectedValue(new Error('boom'));
 
         await expect(service.create(mockBookingDto)).resolves.toEqual(
-          mockBooking,
+          createdBooking,
         );
       });
 
@@ -615,7 +698,7 @@ describe('BookingsService', () => {
         });
 
         await expect(service.create(mockBookingDto)).resolves.toEqual(
-          mockBooking,
+          createdBooking,
         );
       });
 
@@ -634,7 +717,7 @@ describe('BookingsService', () => {
         expect(settled).toBe(false);
 
         await jest.advanceTimersByTimeAsync(1);
-        await expect(pending).resolves.toEqual(mockBooking);
+        await expect(pending).resolves.toEqual(createdBooking);
       });
 
       it('does not leave the timeout timer pending after a fast notification', async () => {
@@ -691,6 +774,388 @@ describe('BookingsService', () => {
       const result = await service.findOne('id-inexistente');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('cancel by token', () => {
+    // Buenos Aires is UTC-3: the booking starts at 10:00 local = 13:00:00Z.
+    const ZONE = 'America/Argentina/Buenos_Aires';
+    const token = generateCancelToken();
+    const booking = {
+      _id: '507f1f77bcf86cd799439011',
+      client: {
+        name: 'Juan Pérez',
+        email: 'juan@example.com',
+        phone: '1234567890',
+      },
+      services: [
+        {
+          id: 'servicio-basico',
+          name: 'Servicio Básico',
+          price: 1200,
+          duration: 60,
+        },
+      ],
+      professional: { id: 'alex-garcia', name: 'Alex García' },
+      date: '2026-03-25',
+      time: '10:00',
+      slots: ['10:00', '10:30'],
+      status: 'confirmed',
+    };
+    const summary = (state: string) => ({
+      state,
+      services: [{ name: 'Servicio Básico' }],
+      professional: { name: 'Alex García' },
+      date: '2026-03-25',
+      time: '10:00',
+    });
+    const at = (utc: string) =>
+      jest.useFakeTimers({
+        now: new Date(utc),
+        // Only the clock is frozen; promises and timers keep running.
+        doNotFake: [
+          'nextTick',
+          'setImmediate',
+          'clearImmediate',
+          'setTimeout',
+          'clearTimeout',
+          'setInterval',
+          'clearInterval',
+        ],
+      });
+
+    const originalZone = process.env.BUSINESS_TIMEZONE;
+    beforeEach(() => {
+      process.env.BUSINESS_TIMEZONE = ZONE;
+      at('2026-03-25T12:00:00Z'); // 09:00 local, one hour before the start
+      mockBookingModel.findOne.mockReturnValue(query(booking));
+      mockBookingModel.findOneAndUpdate.mockReturnValue(
+        query({ ...booking, status: 'cancelled' }),
+      );
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+      if (originalZone === undefined) {
+        delete process.env.BUSINESS_TIMEZONE;
+      } else {
+        process.env.BUSINESS_TIMEZONE = originalZone;
+      }
+    });
+
+    describe('getCancellation', () => {
+      it('looks the booking up by the hash of the token', async () => {
+        await service.getCancellation(token);
+
+        expect(mockBookingModel.findOne).toHaveBeenCalledWith({
+          cancelTokenHash: hashCancelToken(token),
+        });
+      });
+
+      it('summarises a cancellable booking without any client data or ids', async () => {
+        await expect(service.getCancellation(token)).resolves.toEqual(
+          summary('cancellable'),
+        );
+      });
+
+      it('is still cancellable exactly 60 seconds before the start', async () => {
+        at('2026-03-25T12:59:00Z');
+
+        await expect(service.getCancellation(token)).resolves.toMatchObject({
+          state: 'cancellable',
+        });
+      });
+
+      it('is closed 59 seconds before the start, at the start and after it', async () => {
+        for (const now of [
+          '2026-03-25T12:59:01Z',
+          '2026-03-25T13:00:00Z',
+          '2026-03-25T16:00:00Z',
+        ]) {
+          at(now);
+          await expect(service.getCancellation(token)).resolves.toMatchObject({
+            state: 'closed',
+          });
+        }
+      });
+
+      it('reports a cancelled booking as cancelled without needing the timezone', async () => {
+        delete process.env.BUSINESS_TIMEZONE;
+        mockBookingModel.findOne.mockReturnValue(
+          query({ ...booking, status: 'cancelled' }),
+        );
+
+        await expect(service.getCancellation(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+      });
+
+      it('answers 404 for a token that matches no booking', async () => {
+        mockBookingModel.findOne.mockReturnValue(query(null));
+
+        await expect(service.getCancellation(token)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      });
+
+      it('answers 404 for a malformed token without touching the database', async () => {
+        for (const bad of ['', 'abc', 'x'.repeat(44), `${token.slice(1)}!`]) {
+          await expect(service.getCancellation(bad)).rejects.toBeInstanceOf(
+            NotFoundException,
+          );
+        }
+        expect(mockBookingModel.findOne).not.toHaveBeenCalled();
+      });
+
+      it('answers 503 when BUSINESS_TIMEZONE is unset or invalid', async () => {
+        delete process.env.BUSINESS_TIMEZONE;
+        await expect(service.getCancellation(token)).rejects.toBeInstanceOf(
+          ServiceUnavailableException,
+        );
+
+        process.env.BUSINESS_TIMEZONE = 'Not/AZone';
+        await expect(service.getCancellation(token)).rejects.toBeInstanceOf(
+          ServiceUnavailableException,
+        );
+      });
+    });
+
+    describe('cancelByToken', () => {
+      it('cancels a confirmed booking atomically and returns the summary', async () => {
+        const result = await service.cancelByToken(token);
+
+        expect(mockBookingModel.findOneAndUpdate).toHaveBeenCalledWith(
+          { _id: booking._id, status: 'confirmed' },
+          { status: 'cancelled' },
+          { new: true },
+        );
+        expect(result).toEqual(summary('cancelled'));
+      });
+
+      it('is accepted exactly 60 seconds before the start', async () => {
+        at('2026-03-25T12:59:00Z');
+
+        await expect(service.cancelByToken(token)).resolves.toMatchObject({
+          state: 'cancelled',
+        });
+      });
+
+      it('answers 409 and changes nothing once the cutoff has passed', async () => {
+        for (const now of ['2026-03-25T12:59:01Z', '2026-03-25T13:30:00Z']) {
+          at(now);
+          await expect(service.cancelByToken(token)).rejects.toBeInstanceOf(
+            ConflictException,
+          );
+        }
+        expect(mockBookingModel.findOneAndUpdate).not.toHaveBeenCalled();
+      });
+
+      it('is idempotent: cancelling an already cancelled booking answers the summary', async () => {
+        mockBookingModel.findOne.mockReturnValue(
+          query({ ...booking, status: 'cancelled' }),
+        );
+
+        await expect(service.cancelByToken(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+        expect(mockBookingModel.findOneAndUpdate).not.toHaveBeenCalled();
+      });
+
+      it('treats losing a race to a concurrent cancel as already cancelled', async () => {
+        mockBookingModel.findOneAndUpdate.mockReturnValue(query(null));
+
+        await expect(service.cancelByToken(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+      });
+
+      it('tells the admin panel over the socket, with the id only, when it cancels', async () => {
+        await service.cancelByToken(token);
+
+        expect(mockGateway.notifyBookingCancelled).toHaveBeenCalledTimes(1);
+        expect(mockGateway.notifyBookingCancelled).toHaveBeenCalledWith(
+          booking._id,
+        );
+      });
+
+      it('does not emit when nothing changed: closed, already cancelled or lost race', async () => {
+        at('2026-03-25T13:30:00Z');
+        await expect(service.cancelByToken(token)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+
+        at('2026-03-25T12:00:00Z');
+        mockBookingModel.findOne.mockReturnValue(
+          query({ ...booking, status: 'cancelled' }),
+        );
+        await service.cancelByToken(token);
+
+        mockBookingModel.findOne.mockReturnValue(query(booking));
+        mockBookingModel.findOneAndUpdate.mockReturnValue(query(null));
+        await service.cancelByToken(token);
+
+        expect(mockGateway.notifyBookingCancelled).not.toHaveBeenCalled();
+      });
+
+      it('still cancels when the socket fails', async () => {
+        mockGateway.notifyBookingCancelled.mockImplementation(() => {
+          throw new Error('socket down');
+        });
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+        await expect(service.cancelByToken(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it('emails the client the cancellation when the booking has an email', async () => {
+        await service.cancelByToken(token);
+
+        expect(
+          mockEmailService.sendCancellationConfirmation,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+          mockEmailService.sendCancellationConfirmation,
+        ).toHaveBeenCalledWith({ ...booking, status: 'cancelled' });
+      });
+
+      it('sends no email to a booking without one', async () => {
+        const { email: _omit, ...clientWithoutEmail } = booking.client;
+        mockBookingModel.findOne.mockReturnValue(
+          query({ ...booking, client: clientWithoutEmail }),
+        );
+        mockBookingModel.findOneAndUpdate.mockReturnValue(
+          query({
+            ...booking,
+            client: clientWithoutEmail,
+            status: 'cancelled',
+          }),
+        );
+
+        await service.cancelByToken(token);
+
+        expect(
+          mockEmailService.sendCancellationConfirmation,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('sends no email when nothing changed: closed, already cancelled or lost race', async () => {
+        at('2026-03-25T13:30:00Z');
+        await expect(service.cancelByToken(token)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+
+        at('2026-03-25T12:00:00Z');
+        mockBookingModel.findOne.mockReturnValue(
+          query({ ...booking, status: 'cancelled' }),
+        );
+        await service.cancelByToken(token);
+
+        mockBookingModel.findOne.mockReturnValue(query(booking));
+        mockBookingModel.findOneAndUpdate.mockReturnValue(query(null));
+        await service.cancelByToken(token);
+
+        expect(
+          mockEmailService.sendCancellationConfirmation,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('still cancels when the email fails', async () => {
+        mockEmailService.sendCancellationConfirmation.mockRejectedValue(
+          new Error('smtp down'),
+        );
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+        await expect(service.cancelByToken(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it('tells the admin on WhatsApp once, with the cancelled booking', async () => {
+        await service.cancelByToken(token);
+
+        expect(mockAdminNotifier.notifyCancelledBooking).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(mockAdminNotifier.notifyCancelledBooking).toHaveBeenCalledWith({
+          ...booking,
+          status: 'cancelled',
+        });
+        expect(mockAdminNotifier.notifyNewBooking).not.toHaveBeenCalled();
+      });
+
+      it('does not tell the admin when nothing changed: closed, already cancelled or lost race', async () => {
+        at('2026-03-25T13:30:00Z');
+        await expect(service.cancelByToken(token)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+
+        at('2026-03-25T12:00:00Z');
+        mockBookingModel.findOne.mockReturnValue(
+          query({ ...booking, status: 'cancelled' }),
+        );
+        await service.cancelByToken(token);
+
+        mockBookingModel.findOne.mockReturnValue(query(booking));
+        mockBookingModel.findOneAndUpdate.mockReturnValue(query(null));
+        await service.cancelByToken(token);
+
+        expect(mockAdminNotifier.notifyCancelledBooking).not.toHaveBeenCalled();
+      });
+
+      it('still cancels when the admin notice rejects or throws', async () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+        mockAdminNotifier.notifyCancelledBooking.mockRejectedValue(
+          new Error('boom'),
+        );
+        await expect(service.cancelByToken(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+
+        mockAdminNotifier.notifyCancelledBooking.mockImplementation(() => {
+          throw new Error('boom');
+        });
+        await expect(service.cancelByToken(token)).resolves.toEqual(
+          summary('cancelled'),
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it('stops waiting for a notifier slower than the timeout', async () => {
+        jest.useRealTimers();
+        mockAdminNotifier.notifyCancelledBooking.mockReturnValue(
+          new Promise(() => undefined),
+        );
+        const clock = jest.useFakeTimers({
+          now: new Date('2026-03-25T12:00:00Z'),
+          doNotFake: ['nextTick', 'setImmediate', 'clearImmediate'],
+        });
+        void clock;
+
+        const pending = service.cancelByToken(token);
+        await jest.advanceTimersByTimeAsync(5000);
+
+        await expect(pending).resolves.toEqual(summary('cancelled'));
+      });
+
+      it('answers 404 for an unknown token and 503 without a valid timezone', async () => {
+        mockBookingModel.findOne.mockReturnValue(query(null));
+        await expect(service.cancelByToken(token)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+
+        mockBookingModel.findOne.mockReturnValue(query(booking));
+        delete process.env.BUSINESS_TIMEZONE;
+        await expect(service.cancelByToken(token)).rejects.toBeInstanceOf(
+          ServiceUnavailableException,
+        );
+        expect(mockBookingModel.findOneAndUpdate).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -794,6 +1259,15 @@ describe('BookingsService', () => {
       expect(payload.services).toBeUndefined();
       expect(payload.totalPrice).toBeUndefined();
       expect(payload.totalDuration).toBeUndefined();
+    });
+
+    it('never lets a request set the cancel token hash', async () => {
+      await service.update(id, {
+        notes: 'x',
+        cancelTokenHash: 'a'.repeat(64),
+      } as any);
+
+      expect(updatePayload()).toEqual({ notes: 'x' });
     });
 
     it('debería re-resolver los servicios y slots al cambiar la lista de servicios', async () => {

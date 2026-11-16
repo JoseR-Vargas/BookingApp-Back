@@ -79,9 +79,21 @@ export class Booking extends Document {
 
   @Prop({ type: String, enum: BOOKING_STATUSES, default: 'confirmed' })
   status: BookingStatus;
+
+  /**
+   * SHA-256 hex digest of the secret the client uses to cancel. Queries never
+   * return it (`select: false`); a freshly saved document does, so it is
+   * stripped before the booking leaves the service. Bookings created before
+   * the cancel link existed have none.
+   */
+  @Prop({ type: String, select: false })
+  cancelTokenHash?: string;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
+
+/** Lookup by token on the public cancel endpoints. */
+BookingSchema.index({ cancelTokenHash: 1 }, { unique: true, sparse: true });
 
 /**
  * One confirmed booking per professional, date and slot. Being multikey on

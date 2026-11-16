@@ -7,9 +7,9 @@ import { WhatsappClient } from './whatsapp.client';
 import { WhatsappConfig } from './whatsapp.config';
 
 /**
- * Tells the admin on WhatsApp (utility template) that a booking was created.
- * Best effort: it never throws, so a notification problem can never break
- * the booking flow that calls it.
+ * Tells the admin on WhatsApp (utility templates) that a booking was created
+ * or cancelled. Best effort: it never throws, so a notification problem can
+ * never break the booking flow that calls it.
  */
 @Injectable()
 export class AdminBookingNotifier {
@@ -21,6 +21,25 @@ export class AdminBookingNotifier {
   ) {}
 
   async notifyNewBooking(booking: AdminNotifiableBooking): Promise<void> {
+    await this.notify(this.config.adminTemplateName, booking);
+  }
+
+  /** Same message shape as a new booking, with the cancel template. */
+  async notifyCancelledBooking(booking: AdminNotifiableBooking): Promise<void> {
+    const templateName = this.config.adminCancelTemplateName;
+    if (!templateName) {
+      this.logger.warn(
+        'Admin cancellation notice skipped: WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME is unset',
+      );
+      return;
+    }
+    await this.notify(templateName, booking);
+  }
+
+  private async notify(
+    templateName: string,
+    booking: AdminNotifiableBooking,
+  ): Promise<void> {
     try {
       const adminNumber = this.config.adminNumber;
       if (!adminNumber) {
@@ -38,7 +57,7 @@ export class AdminBookingNotifier {
 
       await this.client.sendTemplate(
         adminNumber,
-        this.config.adminTemplateName,
+        templateName,
         this.config.adminTemplateLang,
         buildAdminTemplateParams(booking),
       );
