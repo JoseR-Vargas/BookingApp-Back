@@ -17,6 +17,7 @@ describe('AdminBookingNotifier', () => {
     adminNumber: string | undefined;
     adminTemplateName: string;
     adminTemplateLang: string;
+    adminCancelTemplateName: string | undefined;
     isSendingConfigured: jest.Mock;
   };
   let sendTemplate: jest.Mock;
@@ -29,6 +30,7 @@ describe('AdminBookingNotifier', () => {
       adminNumber: '5491155551234',
       adminTemplateName: 'nueva_reserva',
       adminTemplateLang: 'es',
+      adminCancelTemplateName: 'reserva_cancelada',
       isSendingConfigured: jest.fn().mockReturnValue(true),
     };
     sendTemplate = jest
@@ -127,5 +129,82 @@ describe('AdminBookingNotifier', () => {
       notifier.notifyNewBooking(null as unknown as AdminNotifiableBooking),
     ).resolves.toBeUndefined();
     expect(error).toHaveBeenCalledTimes(2);
+  });
+  describe('notifyCancelledBooking', () => {
+    it('sends the cancel template with the same 6 ordered params', async () => {
+      await notifier.notifyCancelledBooking(booking);
+
+      expect(sendTemplate).toHaveBeenCalledTimes(1);
+      expect(sendTemplate).toHaveBeenCalledWith(
+        '5491155551234',
+        'reserva_cancelada',
+        'es',
+        [
+          'Juan Pérez',
+          'Servicio Básico',
+          'Alex García',
+          '25/03/2026',
+          '10:00',
+          '1234567890',
+        ],
+      );
+    });
+
+    it('does not use the new-booking template', async () => {
+      await notifier.notifyCancelledBooking(booking);
+
+      expect(sendTemplate.mock.calls[0][1]).not.toBe('nueva_reserva');
+    });
+
+    it('skips with a single warn when no cancel template is configured', async () => {
+      settings.adminCancelTemplateName = undefined;
+
+      await expect(
+        notifier.notifyCancelledBooking(booking),
+      ).resolves.toBeUndefined();
+
+      expect(sendTemplate).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME'),
+      );
+    });
+
+    it('applies the same guards: no admin number, sending not configured', async () => {
+      settings.adminNumber = undefined;
+      await notifier.notifyCancelledBooking(booking);
+
+      settings.adminNumber = '5491155551234';
+      settings.isSendingConfigured.mockReturnValue(false);
+      await notifier.notifyCancelledBooking(booking);
+
+      expect(sendTemplate).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(2);
+    });
+
+    it('never throws, and never leaks a token, on a WhatsApp API error', async () => {
+      sendTemplate.mockRejectedValue(
+        new WhatsappApiError(400, {
+          error: { message: '(#132001) Template name does not exist' },
+        }),
+      );
+
+      await expect(
+        notifier.notifyCancelledBooking(booking),
+      ).resolves.toBeUndefined();
+
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(error).not.toHaveBeenCalledWith(
+        expect.stringMatching(/bearer|token/i),
+      );
+    });
+
+    it('never throws on unexpected errors', async () => {
+      sendTemplate.mockRejectedValue(new Error('network down'));
+
+      await expect(
+        notifier.notifyCancelledBooking(booking),
+      ).resolves.toBeUndefined();
+    });
   });
 });

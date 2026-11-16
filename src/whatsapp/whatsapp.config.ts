@@ -54,6 +54,15 @@ export class WhatsappConfig {
     );
   }
 
+  /**
+   * Approved template for the "booking cancelled" notice. It has no default
+   * (the new-booking template would say the wrong thing): unset means the
+   * admin is simply not told on WhatsApp.
+   */
+  get adminCancelTemplateName(): string | undefined {
+    return this.read('WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME');
+  }
+
   get adminTemplateLang(): string {
     return (
       this.read('WHATSAPP_ADMIN_TEMPLATE_LANG') ?? DEFAULT_ADMIN_TEMPLATE_LANG

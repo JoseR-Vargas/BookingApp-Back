@@ -6,9 +6,12 @@ import {
   Patch,
   Param,
   Delete,
+  UseGuards,
+  HttpCode,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { AdminKeyGuard } from '../auth/admin-key.guard';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto, UpdateBookingDto } from './dto/create-booking.dto';
 
@@ -20,7 +23,9 @@ const BUSINESS_ERROR_MARKERS = [
   'Error de validación',
 ];
 
-// Use 'bookings' because a global prefix 'api' is set in main.ts
+// Use 'bookings' because a global prefix 'api' is set in main.ts.
+// Public: creating a booking, checking availability and the token-based cancel
+// routes. Everything that reads or changes bookings in general is admin only.
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
@@ -34,6 +39,23 @@ export class BookingsController {
     }
   }
 
+  /**
+   * Public cancel page for the client. Authorised by the secret token in the
+   * URL alone, so these two routes stay outside the admin guard. Declared
+   * before ':id'; its two segments never collide with it anyway.
+   */
+  @Get('cancel/:token')
+  getCancellation(@Param('token') token: string) {
+    return this.bookingsService.getCancellation(token);
+  }
+
+  @Post('cancel/:token')
+  @HttpCode(HttpStatus.OK)
+  cancel(@Param('token') token: string) {
+    return this.bookingsService.cancelByToken(token);
+  }
+
+  @UseGuards(AdminKeyGuard)
   @Get('statistics')
   getStatistics() {
     return this.bookingsService.getStatistics();
@@ -61,16 +83,19 @@ export class BookingsController {
     }
   }
 
+  @UseGuards(AdminKeyGuard)
   @Get()
   findAll() {
     return this.bookingsService.findAll();
   }
 
+  @UseGuards(AdminKeyGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.bookingsService.findOne(id);
   }
 
+  @UseGuards(AdminKeyGuard)
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -83,6 +108,7 @@ export class BookingsController {
     }
   }
 
+  @UseGuards(AdminKeyGuard)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.bookingsService.remove(id);

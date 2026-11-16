@@ -141,6 +141,28 @@ Without an approved template (or with a wrong name/language) the admin message
 fails or is skipped, **but bookings are never affected**: the failure is only
 logged.
 
+### 4.1 Cancellation notice template (optional)
+
+When a client cancels from the link in their email, the backend can tell the
+admin too. It needs a **second** template: the one above says "Nueva reserva"
+and would be wrong here. Create it exactly like the first one:
+
+- [ ] **Category** `Utility`, **Name** `reserva_cancelada` (must match
+      `WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME`), same **Language** as the first
+      template (`WHATSAPP_ADMIN_TEMPLATE_LANG` is used for both).
+- [ ] **Body** (same six positional variables and meaning as section 4):
+
+    ```text
+    Reserva cancelada de {{1}} ({{6}}): {{2}} con {{3}} el {{4}} a las {{5}}.
+    ```
+
+- [ ] Set `WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME=reserva_cancelada` once the
+      template is **Active**.
+
+Leave the variable blank to skip this notice: the cancellation still works, the
+admin panel still updates live, and the log shows `Admin cancellation notice
+skipped`. Admin cancellations made from the panel never send it.
+
 ## 5. Environment variables
 
 Set them in Vercel: **Project -> Settings -> Environment Variables** -> add the
@@ -158,7 +180,8 @@ name and value for **Production** (and Preview if you use it) -> save ->
 | `ADMIN_WHATSAPP_NUMBER`        | No (needed for admin alerts)   | Admin's number, digits, no `+`        | none          | Admin notification skipped with a warning; bookings unaffected |
 | `WHATSAPP_ADMIN_TEMPLATE_NAME` | No                             | Name of the approved template         | `nueva_reserva` | Default is used |
 | `WHATSAPP_ADMIN_TEMPLATE_LANG` | No                             | Language code of the template         | `es`          | Default is used |
-| `BUSINESS_TIMEZONE`            | **Yes, for the bot**           | IANA name, e.g. `America/Mexico_City` | none          | The bot answers "try again later" and **never books** |
+| `WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME` | No                      | Name of the approved cancellation template (section 4.1) | none | Cancellation notice to the admin skipped with a warning; cancellations unaffected |
+| `BUSINESS_TIMEZONE`            | **Yes, for the bot and for cancelling by link** | IANA name, e.g. `America/Mexico_City` | none | The bot answers "try again later" and **never books**; cancel endpoints answer 503 |
 
 `BUSINESS_TIMEZONE` must be a valid IANA time zone (`Area/City`, not `GMT-5`
 or `CST`). The bot uses it to hide hours that already passed today; if it is

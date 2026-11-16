@@ -37,4 +37,18 @@ export class BookingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
     }
   }
+
+  /**
+   * Lets the admin panel refresh a row after a cancellation. It takes only the
+   * id, so the payload can never carry client data.
+   */
+  notifyBookingCancelled(id: string) {
+    if (this.server) {
+      try {
+        this.server.emit('bookingCancelled', { id, status: 'cancelled' });
+      } catch (error) {
+        console.error('Error al notificar cancelación por WebSocket:', error);
+      }
+    }
+  }
 }

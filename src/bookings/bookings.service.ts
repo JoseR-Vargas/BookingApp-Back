@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { BookedService, Booking } from './schemas/booking.schema';
@@ -12,6 +17,12 @@ import {
   ServiceSelectionError,
 } from '../catalog/service-selection';
 import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
+import {
+  CANCEL_TOKEN_PATTERN,
+  cancelWindow,
+  generateCancelToken,
+  hashCancelToken,
+} from './cancellation';
 import {
   OccupyingBooking,
   buildDaySlots,
@@ -44,7 +55,29 @@ const DERIVED_FIELDS = [
   'slots',
   'totalPrice',
   'totalDuration',
+  'cancelTokenHash',
 ] as const;
+
+/**
+ * A booking as it leaves `create`: a plain object without the token hash,
+ * plus the cancel token itself. This is the only moment the token exists in
+ * the clear; the database keeps just its hash.
+ */
+export type CreatedBooking = Record<string, unknown> & { cancelToken: string };
+
+/**
+ * Plain copy of a saved booking without `cancelTokenHash`. A saved document
+ * carries the hash even though queries hide it, and everything the service
+ * hands out (response, socket, email, admin notice) goes through here.
+ */
+function withoutCancelHash(booking: Booking): Record<string, unknown> {
+  const plain: Record<string, unknown> =
+    typeof booking.toObject === 'function'
+      ? booking.toObject()
+      : { ...booking };
+  delete plain.cancelTokenHash;
+  return plain;
+}
 
 const serviceIdsOf = (services: { id?: string }[] | null | undefined) =>
   Array.isArray(services) ? services.map((service) => service?.id ?? '') : [];
@@ -57,6 +90,31 @@ const toBookedService = (service: Service): BookedService => ({
 });
 
 const CANCELLED = 'cancelled';
+
+export type CancelState = 'cancellable' | 'closed' | 'cancelled';
+
+/**
+ * What the public cancel page may see. Deliberately no client name, phone or
+ * email and no ids: the token alone grants access to this.
+ */
+export interface CancellationSummary {
+  state: CancelState;
+  services: { name: string }[];
+  professional: { name: string };
+  date: string;
+  time: string;
+}
+
+const toCancellationSummary = (
+  booking: Booking,
+  state: CancelState,
+): CancellationSummary => ({
+  state,
+  services: (booking.services ?? []).map(({ name }) => ({ name })),
+  professional: { name: booking.professional?.name },
+  date: booking.date,
+  time: booking.time,
+});
 
 /**
  * Upper bound for the admin notification. The WhatsApp client aborts at 8s;
@@ -100,7 +158,7 @@ export class BookingsService {
     private adminNotifier: AdminBookingNotifier,
   ) {}
 
-  async create(createBookingDto: CreateBookingDto): Promise<Booking> {
+  async create(createBookingDto: CreateBookingDto): Promise<CreatedBooking> {
     try {
       const { client, date, time, notes } = createBookingDto;
       // Validar datos requeridos
@@ -123,6 +181,7 @@ export class BookingsService {
         time,
       });
 
+      const cancelToken = generateCancelToken();
       const createdBooking = new this.bookingModel({
         client,
         date,
@@ -130,11 +189,14 @@ export class BookingsService {
         notes,
         ...resolved,
         status: 'confirmed',
+        cancelTokenHash: hashCancelToken(cancelToken),
       });
-      const savedBooking = await this.withConflictMapping(
+      const saved = await this.withConflictMapping(
         () => createdBooking.save(),
         conflictMessage(resolved.professional.name, date, time),
       );
+      // Everything below sees the booking without its hash.
+      const savedBooking = withoutCancelHash(saved) as unknown as Booking;
 
       // Emitir evento WebSocket cuando se crea una nueva reserva (no crítico si falla)
       try {
@@ -149,7 +211,10 @@ export class BookingsService {
       // Enviar email de confirmación (no crítico; las reservas por WhatsApp no tienen email)
       if (savedBooking.client?.email) {
         try {
-          await this.emailService.sendBookingConfirmation(savedBooking);
+          await this.emailService.sendBookingConfirmation(
+            savedBooking,
+            cancelToken,
+          );
         } catch (emailError) {
           console.error(
             'Error al enviar email de confirmación (no crítico):',
@@ -158,9 +223,14 @@ export class BookingsService {
         }
       }
 
-      await this.notifyAdmin(savedBooking);
+      await this.notifyAdmin(() =>
+        this.adminNotifier.notifyNewBooking(savedBooking),
+      );
 
-      return savedBooking;
+      return {
+        ...(savedBooking as unknown as Record<string, unknown>),
+        cancelToken,
+      };
     } catch (error) {
       throw toBusinessError(error);
     }
@@ -233,6 +303,94 @@ export class BookingsService {
     return this.bookingModel.findByIdAndDelete(id).exec();
   }
 
+  /** Public cancel page: what the booking is and whether it can still be cancelled. */
+  async getCancellation(token: string): Promise<CancellationSummary> {
+    const booking = await this.findByCancelToken(token);
+    return toCancellationSummary(booking, this.cancelStateOf(booking));
+  }
+
+  /**
+   * Cancels the booking that owns `token`, up to one minute before it starts.
+   * Idempotent: an already cancelled booking answers its summary.
+   */
+  async cancelByToken(token: string): Promise<CancellationSummary> {
+    const booking = await this.findByCancelToken(token);
+    const state = this.cancelStateOf(booking);
+    if (state === 'cancelled') {
+      return toCancellationSummary(booking, 'cancelled');
+    }
+    if (state === 'closed') {
+      throw new ConflictException('Ya no es posible cancelar esta reserva');
+    }
+
+    // Atomic on the status: of two simultaneous requests only one cancels.
+    const cancelled = await this.bookingModel
+      .findOneAndUpdate(
+        { _id: booking._id, status: 'confirmed' },
+        { status: CANCELLED },
+        { new: true },
+      )
+      .exec();
+    if (!cancelled) {
+      // Another request cancelled it first: nothing changed here, nothing to announce.
+      return toCancellationSummary(booking, 'cancelled');
+    }
+
+    try {
+      this.bookingsGateway.notifyBookingCancelled(String(cancelled._id));
+    } catch (wsError) {
+      console.error('Error al notificar por WebSocket (no crítico):', wsError);
+    }
+
+    // Bookings made through WhatsApp have no email.
+    if (cancelled.client?.email) {
+      try {
+        await this.emailService.sendCancellationConfirmation(cancelled);
+      } catch (emailError) {
+        console.error(
+          'Error al enviar email de cancelación (no crítico):',
+          emailError,
+        );
+      }
+    }
+
+    await this.notifyAdmin(() =>
+      this.adminNotifier.notifyCancelledBooking(cancelled),
+    );
+    return toCancellationSummary(cancelled, 'cancelled');
+  }
+
+  private async findByCancelToken(token: string): Promise<Booking> {
+    const booking = CANCEL_TOKEN_PATTERN.test(token ?? '')
+      ? await this.bookingModel
+          .findOne({ cancelTokenHash: hashCancelToken(token) })
+          .exec()
+      : null;
+    if (!booking) {
+      // Same answer for a malformed and an unknown token.
+      throw new NotFoundException('Reserva no encontrada');
+    }
+    return booking;
+  }
+
+  /** A cancelled booking needs no clock; anything else is judged in the business timezone. */
+  private cancelStateOf(booking: Booking): CancelState {
+    if (booking.status === CANCELLED) {
+      return 'cancelled';
+    }
+    const window = cancelWindow(
+      booking.date,
+      booking.time,
+      process.env.BUSINESS_TIMEZONE,
+    );
+    if (window === 'unknown') {
+      throw new ServiceUnavailableException(
+        'No se puede verificar el horario del negocio. Intenta más tarde.',
+      );
+    }
+    return window === 'open' ? 'cancellable' : 'closed';
+  }
+
   /** Whether the professional can perform all services starting at `time`. */
   async checkAvailability(
     date: string,
@@ -295,16 +453,13 @@ export class BookingsService {
    * rather than fired and forgotten because serverless platforms freeze
    * un-awaited work once the response is sent. Never throws.
    */
-  private async notifyAdmin(booking: Booking): Promise<void> {
+  private async notifyAdmin(send: () => Promise<void>): Promise<void> {
     let timer: NodeJS.Timeout | undefined;
     try {
       const timeout = new Promise<void>((resolve) => {
         timer = setTimeout(resolve, ADMIN_NOTIFY_TIMEOUT_MS);
       });
-      await Promise.race([
-        this.adminNotifier.notifyNewBooking(booking),
-        timeout,
-      ]);
+      await Promise.race([send(), timeout]);
     } catch (notifyError) {
       console.error(
         'Error al notificar al administrador por WhatsApp (no crítico):',

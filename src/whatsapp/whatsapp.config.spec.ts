@@ -56,6 +56,18 @@ describe('WhatsappConfig', () => {
       expect(config.adminTemplateLang).toBe('es');
     });
 
+    it('has no cancel template unless one is configured', () => {
+      expect(build({}).adminCancelTemplateName).toBeUndefined();
+      expect(
+        build({ WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME: '   ' })
+          .adminCancelTemplateName,
+      ).toBeUndefined();
+      expect(
+        build({ WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME: ' reserva_cancelada ' })
+          .adminCancelTemplateName,
+      ).toBe('reserva_cancelada');
+    });
+
     it('reads the admin variables from the environment', () => {
       const config = build({
         ADMIN_WHATSAPP_NUMBER: '5491155551234',
