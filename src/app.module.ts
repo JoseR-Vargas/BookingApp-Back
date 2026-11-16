@@ -10,6 +10,7 @@ import { AvailabilityModule } from './availability/availability.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
+import { BrandingModule } from './branding/branding.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AdminModule } from './admin/admin.module';
     WhatsappModule,
     AuthModule,
     AdminModule,
+    BrandingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

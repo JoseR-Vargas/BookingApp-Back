@@ -7,6 +7,15 @@ export async function createApp(): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+  configureApp(app);
+  return app;
+}
+
+/** HTTP setup shared by the server and its tests: body parsing, prefix, CORS. */
+export function configureApp(app: NestExpressApplication): void {
+  // A 200 KB logo is ~270 KB in base64, above the 100kb default. Nest passes
+  // the app's `rawBody` option to this parser, so the webhook keeps req.rawBody.
+  app.useBodyParser('json', { limit: '1mb' });
 
   // Configurar prefijo global /api para todas las rutas excepto la raíz
   app.setGlobalPrefix('api', {
@@ -27,8 +36,6 @@ export async function createApp(): Promise<NestExpressApplication> {
   };
 
   app.enableCors(corsOptions);
-
-  return app;
 }
 
 async function bootstrap() {
