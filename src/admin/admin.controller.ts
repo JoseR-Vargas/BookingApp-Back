@@ -84,6 +84,20 @@ export class AdminController {
     return this.catalogAdmin.updateProfessional(id, { active: false });
   }
 
+  /**
+   * Hard delete. Refused with 409 while the professional has future confirmed
+   * bookings or is the only professional of a service.
+   */
+  @Delete('professionals/:id/permanent')
+  deleteProfessionalPermanently(
+    @Param('id') id: string,
+  ): Promise<{ id: string; deleted: true }> {
+    return this.catalogAdmin.deleteProfessionalPermanently(
+      id,
+      currentBusinessDate(),
+    );
+  }
+
   @Post('services')
   async createService(@Body() body: unknown): Promise<AdminService> {
     return this.catalogAdmin.createService(parseServiceCreate(body));
@@ -101,6 +115,17 @@ export class AdminController {
   @Delete('services/:id')
   deleteService(@Param('id') id: string): Promise<AdminService> {
     return this.catalogAdmin.updateService(id, { active: false });
+  }
+
+  /** Hard delete. Refused with 409 while the service has future confirmed bookings. */
+  @Delete('services/:id/permanent')
+  deleteServicePermanently(
+    @Param('id') id: string,
+  ): Promise<{ id: string; deleted: true }> {
+    return this.catalogAdmin.deleteServicePermanently(
+      id,
+      currentBusinessDate(),
+    );
   }
 
   /**
