@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { MAX_IMAGE_BYTES, parseImageDataUrl } from '../common/image-data-url';
 import { BrandColors, LogoMimeType } from './schemas/branding.schema';
 
 /**
@@ -39,7 +40,7 @@ export const BRANDING_MESSAGES = {
 } as const;
 
 export const MAX_BUSINESS_NAME_LENGTH = 60;
-export const MAX_LOGO_BYTES = 200 * 1024;
+export const MAX_LOGO_BYTES = MAX_IMAGE_BYTES;
 export const MIN_TEXT_CONTRAST = 4.5;
 export const MIN_ACCENT_CONTRAST = 3;
 /**
@@ -151,49 +152,14 @@ export function parseBrandingInput(body: unknown): BrandingInput {
   };
 }
 
-const startsWith = (data: Buffer, bytes: number[], offset = 0): boolean =>
-  data.length >= offset + bytes.length &&
-  bytes.every((byte, i) => data[offset + i] === byte);
-
-const ascii = (text: string): number[] => [...Buffer.from(text, 'ascii')];
-
-/** Magic-byte checks: the file content decides the type, not its name. */
-const SIGNATURES: Record<LogoMimeType, (data: Buffer) => boolean> = {
-  'image/png': (data) =>
-    startsWith(data, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  'image/jpeg': (data) => startsWith(data, [0xff, 0xd8, 0xff]),
-  'image/webp': (data) =>
-    startsWith(data, ascii('RIFF')) && startsWith(data, ascii('WEBP'), 8),
-};
-
-const DATA_URL =
-  /^data:(image\/(?:png|jpeg|webp));base64,((?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/;
-
-/** Upper bound of the base64 length of a MAX_LOGO_BYTES file. */
-const MAX_BASE64_LENGTH = Math.ceil(MAX_LOGO_BYTES / 3) * 4;
-
 /**
  * Body of `PUT /admin/branding/logo`: `{ dataUrl: 'data:image/png;base64,...' }`.
  * Only PNG, JPEG and WebP up to MAX_LOGO_BYTES are accepted, and the declared
  * type must match the file signature.
  */
 export function parseLogoDataUrl(body: unknown): LogoInput {
-  const dataUrl = isObject(body) ? body.dataUrl : undefined;
-  if (typeof dataUrl !== 'string') {
-    return fail(BRANDING_MESSAGES.invalidLogo);
-  }
-  const base64Start = dataUrl.indexOf(',') + 1;
-  if (base64Start === 0 || dataUrl.length - base64Start > MAX_BASE64_LENGTH) {
-    return fail(BRANDING_MESSAGES.invalidLogo);
-  }
-  const match = DATA_URL.exec(dataUrl);
-  if (!match || match[2] === '') {
-    return fail(BRANDING_MESSAGES.invalidLogo);
-  }
-  const mimeType = match[1] as LogoMimeType;
-  const data = Buffer.from(match[2], 'base64');
-  if (data.length > MAX_LOGO_BYTES || !SIGNATURES[mimeType](data)) {
-    return fail(BRANDING_MESSAGES.invalidLogo);
-  }
-  return { mimeType, data };
+  return parseImageDataUrl(
+    isObject(body) ? body.dataUrl : undefined,
+    BRANDING_MESSAGES.invalidLogo,
+  );
 }

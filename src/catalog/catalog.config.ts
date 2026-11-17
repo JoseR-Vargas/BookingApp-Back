@@ -6,6 +6,8 @@ export interface Professional {
   rating: number;
   avatar: string;
   available: boolean;
+  /** Public photo URL, added by the catalog service; `null` without photo. */
+  photoUrl?: string | null;
 }
 
 export interface Service {

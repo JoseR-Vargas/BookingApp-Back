@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { ParsedImage, parseImageDataUrl } from '../common/image-data-url';
 import { DayOfWeek, DaySchedule } from './catalog.config';
 
 /**
@@ -227,3 +228,32 @@ export function parseWeeklySchedule(
   }
   return result;
 }
+
+export const PHOTO_MESSAGES = {
+  invalidPhoto: 'La foto debe ser PNG, JPG o WebP de hasta 200 KB.',
+} as const;
+
+/** Body of `PUT /admin/professionals/:id/photo`: `{ dataUrl }`. */
+export const parseProfessionalPhotoBody = (body: unknown): ParsedImage =>
+  parseImageDataUrl(
+    body !== null && typeof body === 'object'
+      ? (body as Body).dataUrl
+      : undefined,
+    PHOTO_MESSAGES.invalidPhoto,
+  );
+
+/**
+ * Optional `photoDataUrl` of `POST /admin/professionals`: `null` when absent,
+ * a 400 when present but invalid.
+ */
+export const parseOptionalPhotoDataUrl = (
+  body: unknown,
+): ParsedImage | null => {
+  const value =
+    body !== null && typeof body === 'object'
+      ? (body as Body).photoDataUrl
+      : undefined;
+  return value === undefined || value === null
+    ? null
+    : parseImageDataUrl(value, PHOTO_MESSAGES.invalidPhoto);
+};

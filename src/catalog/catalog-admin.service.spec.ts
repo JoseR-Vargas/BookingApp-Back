@@ -33,6 +33,7 @@ describe('CatalogAdminService', () => {
         experience: '3 años',
         rating: 5,
         avatar: 'fas fa-user',
+        photoUrl: null,
         active: true,
       });
       expect(fake.professionalModel.docs).toHaveLength(3);
@@ -114,6 +115,7 @@ describe('CatalogAdminService', () => {
         experience: '6 años',
         rating: 4.8,
         avatar: 'fas fa-user',
+        photoUrl: null,
         active: false,
       });
     });

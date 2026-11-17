@@ -103,6 +103,7 @@ describe('CatalogService', () => {
         experience: '8 años',
         rating: 4.9,
         avatar: 'fas fa-user-tie',
+        photoUrl: null,
         available: true,
       });
     });

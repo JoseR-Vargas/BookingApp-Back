@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { ParsedImage } from '../common/image-data-url';
 import { ProfessionalInput, ServiceInput, slugify } from './catalog-validation';
 import {
   DayOfWeek,
@@ -16,6 +17,7 @@ import {
   AdminProfessional,
   AdminService,
   toAdminProfessional,
+  WITHOUT_PHOTO_BYTES,
   toAdminService,
 } from './catalog.service';
 import { insertIfAbsent } from './insert-if-absent';
@@ -46,10 +48,17 @@ export class CatalogAdminService {
     private readonly settingsModel: Model<BusinessSettingsRecord>,
   ) {}
 
+  /** The photo, already validated, is stored in the same insert. */
   async createProfessional(
     input: ProfessionalInput,
+    photo: ParsedImage | null = null,
   ): Promise<AdminProfessional> {
-    const fields = { ...input, rating: DEFAULT_RATING, avatar: DEFAULT_AVATAR };
+    const fields = {
+      ...input,
+      rating: DEFAULT_RATING,
+      avatar: DEFAULT_AVATAR,
+      photo: photo ? { ...photo, updatedAt: new Date() } : null,
+    };
     const id = await this.insertWithUniqueId(
       this.professionalModel,
       slugify(input.name, 'professional'),
@@ -62,8 +71,29 @@ export class CatalogAdminService {
     id: string,
     patch: Partial<ProfessionalInput>,
   ): Promise<AdminProfessional> {
+    return this.setProfessionalFields(id, patch);
+  }
+
+  setProfessionalPhoto(
+    id: string,
+    photo: ParsedImage,
+  ): Promise<AdminProfessional> {
+    return this.setProfessionalFields(id, {
+      photo: { ...photo, updatedAt: new Date() },
+    });
+  }
+
+  removeProfessionalPhoto(id: string): Promise<AdminProfessional> {
+    return this.setProfessionalFields(id, { photo: null });
+  }
+
+  private async setProfessionalFields(
+    id: string,
+    fields: Partial<ProfessionalRecord>,
+  ): Promise<AdminProfessional> {
     const updated = await this.professionalModel
-      .findOneAndUpdate({ id }, { $set: patch }, { new: true })
+      .findOneAndUpdate({ id }, { $set: fields }, { new: true })
+      .select(WITHOUT_PHOTO_BYTES)
       .lean<ProfessionalRecord | null>()
       .exec();
     if (!updated) {
@@ -137,6 +167,7 @@ export class CatalogAdminService {
   private async assertProfessionalsExist(ids: string[]): Promise<void> {
     const found = await this.professionalModel
       .find({ id: { $in: ids } })
+      .select('id')
       .lean<ProfessionalRecord[]>()
       .exec();
     const known = new Set(found.map((record) => record.id));
