@@ -7,7 +7,7 @@ const COLORS = {
   accent: '#3366ff',
   background: '#ffffff',
   text: '#1a1a1a',
-  accentSecondary: '#0044cc',
+  button: '#0044cc',
 };
 
 const PNG_BYTES = Buffer.from([
@@ -24,6 +24,30 @@ describe('BrandingService', () => {
     });
     await expect(service.getLogo()).resolves.toBeNull();
     expect(model.docs).toHaveLength(0);
+  });
+
+  it('reads a document saved before the button color existed: buttons follow the accent', async () => {
+    const { service } = createFakeBranding([
+      {
+        key: BRANDING_KEY,
+        businessName: 'Don Pepe',
+        colors: {
+          accent: '#c9a96e',
+          background: '#0d0d0d',
+          text: '#f5f0e8',
+          accentSecondary: '#dfc08a',
+        },
+        logo: null,
+      },
+    ]);
+    const branding = await service.getBranding();
+    expect(branding.colors).toEqual({
+      accent: '#c9a96e',
+      background: '#0d0d0d',
+      text: '#f5f0e8',
+      button: null,
+    });
+    expect(branding.colors).not.toHaveProperty('accentSecondary');
   });
 
   it('saves colors and name in the single branding document', async () => {

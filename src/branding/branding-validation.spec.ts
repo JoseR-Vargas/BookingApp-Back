@@ -16,7 +16,7 @@ const validColors = () => ({
   accent: '#c9a96e',
   background: '#0d0d0d',
   text: '#f5f0e8',
-  accentSecondary: null as string | null,
+  button: null as string | null,
 });
 
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -50,13 +50,13 @@ describe('contrastRatio (WCAG 2.1 relative luminance)', () => {
 });
 
 describe('parseBrandingInput', () => {
-  it('accepts the defaults without accentSecondary', () => {
+  it('accepts the defaults without button', () => {
     expect(
       parseBrandingInput({ businessName: null, colors: validColors() }),
     ).toEqual({ businessName: null, colors: validColors() });
   });
 
-  it('accepts an accentSecondary and stores every color lowercase', () => {
+  it('accepts an button and stores every color lowercase', () => {
     expect(
       parseBrandingInput({
         businessName: 'Barbería Don Pepe',
@@ -64,7 +64,7 @@ describe('parseBrandingInput', () => {
           accent: '#C9A96E',
           background: '#0D0D0D',
           text: '#F5F0E8',
-          accentSecondary: '#E0C08A',
+          button: '#E0C08A',
         },
       }),
     ).toEqual({
@@ -73,15 +73,15 @@ describe('parseBrandingInput', () => {
         accent: '#c9a96e',
         background: '#0d0d0d',
         text: '#f5f0e8',
-        accentSecondary: '#e0c08a',
+        button: '#e0c08a',
       },
     });
   });
 
-  it('treats an absent accentSecondary as null', () => {
+  it('treats an absent button as null', () => {
     const colors: Record<string, unknown> = validColors();
-    delete colors.accentSecondary;
-    expect(parseBrandingInput({ colors }).colors.accentSecondary).toBeNull();
+    delete colors.button;
+    expect(parseBrandingInput({ colors }).colors.button).toBeNull();
   });
 
   it.each(['accent', 'background', 'text'] as const)(
@@ -108,12 +108,7 @@ describe('parseBrandingInput', () => {
   it.each(['#fff', 'c9a96e', '#c9a96g', '#c9a96e0', 'red', 12, ''])(
     'rejects the malformed color %p',
     (bad) => {
-      for (const field of [
-        'accent',
-        'background',
-        'text',
-        'accentSecondary',
-      ] as const) {
+      for (const field of ['accent', 'background', 'text', 'button'] as const) {
         rejects(
           () =>
             parseBrandingInput({ colors: { ...validColors(), [field]: bad } }),
@@ -138,7 +133,7 @@ describe('parseBrandingInput', () => {
             accent: '#000000',
             text: '#777777',
             background: '#ffffff',
-            accentSecondary: null,
+            button: null,
           },
         }),
       BRANDING_MESSAGES.textContrast,
@@ -149,7 +144,7 @@ describe('parseBrandingInput', () => {
           accent: '#000000',
           text: '#767676',
           background: '#ffffff',
-          accentSecondary: null,
+          button: null,
         },
       }).colors.text,
     ).toBe('#767676');
@@ -165,24 +160,33 @@ describe('parseBrandingInput', () => {
     rejects(
       () =>
         parseBrandingInput({
-          colors: { ...light, accent: '#959595', accentSecondary: null },
+          colors: { ...light, accent: '#959595', button: null },
         }),
       BRANDING_MESSAGES.accentContrast,
     );
     expect(
       parseBrandingInput({
-        colors: { ...light, accent: '#949494', accentSecondary: null },
+        colors: { ...light, accent: '#949494', button: null },
       }).colors.accent,
     ).toBe('#949494');
   });
 
-  it('rejects an accentSecondary that does not reach 3:1 against the background', () => {
+  it('accepts a button color below 3:1 against the background, down to 2:1 (the label is what must be readable)', () => {
+    const colors = {
+      ...validColors(),
+      background: '#111111',
+      button: '#295294',
+    };
+    expect(parseBrandingInput({ colors }).colors.button).toBe('#295294');
+  });
+
+  it('rejects a button that does not reach 2:1 against the background', () => {
     rejects(
       () =>
         parseBrandingInput({
-          colors: { ...validColors(), accentSecondary: '#222222' },
+          colors: { ...validColors(), button: '#222222' },
         }),
-      'El acento secundario no contrasta lo suficiente con el fondo (mínimo 3:1).',
+      'El color de los botones no contrasta lo suficiente con el fondo (mínimo 2:1).',
     );
   });
 

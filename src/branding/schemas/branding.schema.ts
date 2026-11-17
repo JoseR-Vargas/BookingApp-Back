@@ -10,7 +10,7 @@ export interface BrandColors {
   accent: string;
   background: string;
   text: string;
-  accentSecondary: string | null;
+  button: string | null;
 }
 
 export interface BrandLogo {
@@ -19,12 +19,12 @@ export interface BrandLogo {
   updatedAt: Date;
 }
 
-/** Haas-inspired default colors of the site, used while no branding is saved. */
+/** Default colors of the site (Haas livery: black, white, red-pink accents, blue buttons), used while no branding is saved. */
 export const DEFAULT_COLORS: Readonly<BrandColors> = Object.freeze({
   accent: '#f62039',
-  background: '#f9f2f2',
-  text: '#111111',
-  accentSecondary: '#295294',
+  background: '#111111',
+  text: '#ffffff',
+  button: '#295294',
 });
 
 /** Singleton document of the `branding` collection. */
