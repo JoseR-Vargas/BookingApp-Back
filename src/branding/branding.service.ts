@@ -45,11 +45,25 @@ export function toBuffer(value: unknown): Buffer {
   throw new TypeError('Unsupported logo data');
 }
 
+/**
+ * No document: the defaults. A document saved before the button color existed
+ * has no `button` key: its buttons used the accent, so they keep following it.
+ */
+const toColors = (stored: Partial<BrandColors> | undefined): BrandColors => {
+  if (!stored) return { ...DEFAULT_COLORS };
+  return {
+    accent: stored.accent ?? DEFAULT_COLORS.accent,
+    background: stored.background ?? DEFAULT_COLORS.background,
+    text: stored.text ?? DEFAULT_COLORS.text,
+    button: stored.button ?? null,
+  };
+};
+
 const toPublic = (record: Partial<BrandingRecord> | null): PublicBranding => {
   const logo = record?.logo ?? null;
   return {
     businessName: record?.businessName ?? null,
-    colors: { ...DEFAULT_COLORS, ...(record?.colors ?? {}) },
+    colors: toColors(record?.colors),
     logoUrl: logo
       ? `${LOGO_PATH}?v=${new Date(logo.updatedAt).getTime()}`
       : null,

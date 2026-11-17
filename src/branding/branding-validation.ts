@@ -13,7 +13,7 @@ const COLOR_LABELS: Record<ColorField, string> = {
   accent: 'Acento',
   background: 'Fondo',
   text: 'Texto',
-  accentSecondary: 'Acento secundario',
+  button: 'Botones',
 };
 
 const byField = (build: (label: string) => string) =>
@@ -31,8 +31,8 @@ export const BRANDING_MESSAGES = {
     'El texto no contrasta lo suficiente con el fondo (mínimo 4.5:1).',
   accentContrast:
     'El acento no contrasta lo suficiente con el fondo (mínimo 3:1).',
-  accentSecondaryContrast:
-    'El acento secundario no contrasta lo suficiente con el fondo (mínimo 3:1).',
+  buttonContrast:
+    'El color de los botones no contrasta lo suficiente con el fondo (mínimo 2:1).',
   invalidBusinessName: 'El nombre del negocio debe ser texto.',
   businessNameTooLong: 'El nombre del negocio puede tener hasta 60 caracteres.',
   invalidLogo: 'El logo debe ser PNG, JPG o WebP de hasta 200 KB.',
@@ -42,6 +42,11 @@ export const MAX_BUSINESS_NAME_LENGTH = 60;
 export const MAX_LOGO_BYTES = 200 * 1024;
 export const MIN_TEXT_CONTRAST = 4.5;
 export const MIN_ACCENT_CONTRAST = 3;
+/**
+ * A button is a filled shape with its own label, whose color the front picks
+ * (white or black) for readability, so against the page it only has to stand out.
+ */
+export const MIN_BUTTON_CONTRAST = 2;
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
 
@@ -100,10 +105,10 @@ const parseColors = (value: unknown): BrandColors => {
     accent: color(raw.accent, 'accent'),
     background: color(raw.background, 'background'),
     text: color(raw.text, 'text'),
-    accentSecondary:
-      raw.accentSecondary === undefined || raw.accentSecondary === null
+    button:
+      raw.button === undefined || raw.button === null
         ? null
-        : color(raw.accentSecondary, 'accentSecondary'),
+        : color(raw.button, 'button'),
   };
 
   if (contrastRatio(colors.text, colors.background) < MIN_TEXT_CONTRAST) {
@@ -113,11 +118,10 @@ const parseColors = (value: unknown): BrandColors => {
     fail(BRANDING_MESSAGES.accentContrast);
   }
   if (
-    colors.accentSecondary !== null &&
-    contrastRatio(colors.accentSecondary, colors.background) <
-      MIN_ACCENT_CONTRAST
+    colors.button !== null &&
+    contrastRatio(colors.button, colors.background) < MIN_BUTTON_CONTRAST
   ) {
-    fail(BRANDING_MESSAGES.accentSecondaryContrast);
+    fail(BRANDING_MESSAGES.buttonContrast);
   }
   return colors;
 };

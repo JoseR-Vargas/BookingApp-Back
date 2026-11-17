@@ -28,7 +28,7 @@ const COLORS = {
   accent: '#3366ff',
   background: '#ffffff',
   text: '#1a1a1a',
-  accentSecondary: null,
+  button: null,
 };
 
 /** End-to-end over HTTP with an in-memory model: guard, routing, status codes. */
@@ -126,7 +126,7 @@ describe('Branding HTTP contract', () => {
       },
     );
 
-    it('PUT /api/admin/branding saves with and without accentSecondary', async () => {
+    it('PUT /api/admin/branding saves with and without button', async () => {
       const res = await server()
         .put('/api/admin/branding')
         .set(auth)
@@ -143,12 +143,12 @@ describe('Branding HTTP contract', () => {
         .set(auth)
         .send({
           businessName: 'Barbería Don Pepe',
-          colors: { ...COLORS, accent: '#3366FF', accentSecondary: '#0044CC' },
+          colors: { ...COLORS, accent: '#3366FF', button: '#0044CC' },
         })
         .expect(200);
       expect(bodyOf(withSecondary).colors).toEqual({
         ...COLORS,
-        accentSecondary: '#0044cc',
+        button: '#0044cc',
       });
 
       const read = await server().get('/api/branding').expect(200);
@@ -197,9 +197,9 @@ describe('Branding HTTP contract', () => {
         'El acento no contrasta lo suficiente con el fondo (mínimo 3:1).',
       ],
       [
-        'low accentSecondary contrast',
-        { colors: { ...COLORS, accentSecondary: '#eeeeee' } },
-        'El acento secundario no contrasta lo suficiente con el fondo (mínimo 3:1).',
+        'low button contrast',
+        { colors: { ...COLORS, button: '#eeeeee' } },
+        'El color de los botones no contrasta lo suficiente con el fondo (mínimo 2:1).',
       ],
       [
         'a 61-character name',
