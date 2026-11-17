@@ -6,6 +6,7 @@ import {
   parseBrandingInput,
   parseLogoDataUrl,
 } from './branding-validation';
+import { DEFAULT_COLORS } from './schemas/branding.schema';
 
 const rejects = (fn: () => unknown, message: string | RegExp) => {
   expect(fn).toThrow(BadRequestException);
@@ -103,6 +104,12 @@ describe('parseBrandingInput', () => {
     );
     rejects(() => parseBrandingInput(null), BRANDING_MESSAGES.invalidBody);
     rejects(() => parseBrandingInput([]), BRANDING_MESSAGES.invalidBody);
+  });
+
+  it('accepts the default colors', () => {
+    expect(
+      parseBrandingInput({ colors: { ...DEFAULT_COLORS } }).colors,
+    ).toEqual(DEFAULT_COLORS);
   });
 
   it.each(['#fff', 'c9a96e', '#c9a96g', '#c9a96e0', 'red', 12, ''])(

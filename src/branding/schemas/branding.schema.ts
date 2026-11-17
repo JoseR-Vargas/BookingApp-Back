@@ -19,11 +19,11 @@ export interface BrandLogo {
   updatedAt: Date;
 }
 
-/** Default colors of the site (Haas livery: black, white, red-pink accents, blue buttons), used while no branding is saved. */
+/** Default colors of the site (Haas light palette: light canvas, red-pink accents, blue buttons), used while no branding is saved. */
 export const DEFAULT_COLORS: Readonly<BrandColors> = Object.freeze({
   accent: '#f62039',
-  background: '#111111',
-  text: '#ffffff',
+  background: '#f9f2f2',
+  text: '#111111',
   button: '#295294',
 });
 

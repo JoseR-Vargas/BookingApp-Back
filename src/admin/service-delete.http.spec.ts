@@ -218,6 +218,13 @@ describe('DELETE /api/admin/services/:id/permanent', () => {
       expect((res.body as { id: string }).id).toBe('corte-2');
     });
 
+    it('does not reuse the id when only a cancelled booking still references it', async () => {
+      await setup({ bookings: [booking(['corte'], FUTURE, 'cancelled')] });
+      await del().set(auth).expect(200);
+      const res = await create();
+      expect((res.body as { id: string }).id).toBe('corte-2');
+    });
+
     it('may reuse the id of a deleted service without bookings', async () => {
       await setup({});
       await del().set(auth).expect(200);
