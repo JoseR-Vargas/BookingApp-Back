@@ -1,5 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 
+export interface ProfessionalPhoto {
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+  data: Buffer;
+  updatedAt: Date;
+}
+
 /** A professional stored in the `professionals` collection. */
 @Schema({ collection: 'professionals', versionKey: false })
 export class ProfessionalRecord {
@@ -24,6 +30,13 @@ export class ProfessionalRecord {
 
   @Prop({ type: Boolean, default: true })
   active: boolean;
+
+  /**
+   * Profile picture. Queries exclude `photo.data` (`-photo.data`); only the
+   * photo endpoint reads the bytes. Missing field = no photo.
+   */
+  @Prop({ type: Object, default: null })
+  photo: ProfessionalPhoto | null;
 }
 
 export const ProfessionalSchema =

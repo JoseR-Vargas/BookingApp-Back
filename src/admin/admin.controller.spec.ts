@@ -56,12 +56,10 @@ describe('AdminController', () => {
       await expect(
         controller.createProfessional({ name: ' Ana ', id: 'x' }),
       ).resolves.toEqual({ id: 'ana' });
-      expect(admin.createProfessional).toHaveBeenCalledWith({
-        name: 'Ana',
-        specialty: '',
-        experience: '',
-        active: true,
-      });
+      expect(admin.createProfessional).toHaveBeenCalledWith(
+        { name: 'Ana', specialty: '', experience: '', active: true },
+        null,
+      );
     });
 
     it('answers 400 for an invalid create body without touching the service', async () => {

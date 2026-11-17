@@ -10,6 +10,7 @@ import {
   Service,
   WeeklySchedule,
 } from './catalog.config';
+import { toBuffer } from '../branding/branding.service';
 import { insertIfAbsent } from './insert-if-absent';
 import {
   BusinessSettingsRecord,
@@ -20,8 +21,9 @@ import { ServiceRecord } from './schemas/service.schema';
 import { ServiceSelection, ServiceSelectionError } from './service-selection';
 
 /** Admin view of a professional: the stored fields, `active` included. */
-export type AdminProfessional = Omit<Professional, 'available'> & {
+export type AdminProfessional = Omit<Professional, 'available' | 'photoUrl'> & {
   active: boolean;
+  photoUrl: string | null;
 };
 
 /** Admin view of a service: the public fields plus `active`. */
@@ -32,6 +34,19 @@ export interface AdminCatalog {
   services: AdminService[];
   schedule: WeeklySchedule;
 }
+
+/** Projection that keeps the photo bytes out of every professional query. */
+export const WITHOUT_PHOTO_BYTES = '-photo.data';
+
+export interface StoredPhoto {
+  mimeType: string;
+  data: Buffer;
+}
+
+const photoUrlOf = (record: ProfessionalRecord): string | null =>
+  record.photo
+    ? `/api/catalog/professionals/${record.id}/photo?v=${new Date(record.photo.updatedAt).getTime()}`
+    : null;
 
 /** Natural creation order: seeded defaults first, then admin additions. */
 const CREATION_ORDER = { _id: 1 } as const;
@@ -46,6 +61,7 @@ export const toAdminProfessional = (
   rating: record.rating,
   avatar: record.avatar,
   active: record.active,
+  photoUrl: photoUrlOf(record),
 });
 
 export const toAdminService = (record: ServiceRecord): AdminService => ({
@@ -67,6 +83,7 @@ const toPublicProfessional = (record: ProfessionalRecord): Professional => ({
   rating: record.rating,
   avatar: record.avatar,
   available: true,
+  photoUrl: photoUrlOf(record),
 });
 
 const toPublicService = (record: ServiceRecord): Service => ({
@@ -148,6 +165,7 @@ export class CatalogService implements OnModuleInit {
     const [professionals, services, schedule] = await Promise.all([
       this.professionalModel
         .find({})
+        .select(WITHOUT_PHOTO_BYTES)
         .sort(CREATION_ORDER)
         .lean<ProfessionalRecord[]>()
         .exec(),
@@ -192,9 +210,22 @@ export class CatalogService implements OnModuleInit {
   async findProfessional(id: string): Promise<Professional | undefined> {
     const record = await this.professionalModel
       .findOne({ id, active: true })
+      .select(WITHOUT_PHOTO_BYTES)
       .lean<ProfessionalRecord | null>()
       .exec();
     return record ? toPublicProfessional(record) : undefined;
+  }
+
+  /** The photo of a professional, active or not; null without photo. */
+  async getProfessionalPhoto(id: string): Promise<StoredPhoto | null> {
+    const record = await this.professionalModel
+      .findOne({ id })
+      .lean<ProfessionalRecord | null>()
+      .exec();
+    const photo = record?.photo;
+    return photo
+      ? { mimeType: photo.mimeType, data: toBuffer(photo.data) }
+      : null;
   }
 
   /**
@@ -252,6 +283,7 @@ export class CatalogService implements OnModuleInit {
   private activeProfessionals(): Promise<ProfessionalRecord[]> {
     return this.professionalModel
       .find({ active: true })
+      .select(WITHOUT_PHOTO_BYTES)
       .sort(CREATION_ORDER)
       .lean<ProfessionalRecord[]>()
       .exec();

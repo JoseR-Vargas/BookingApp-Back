@@ -140,6 +140,7 @@ describe('Admin HTTP contract', () => {
       experience: '2 años',
       rating: 5,
       avatar: 'fas fa-user',
+      photoUrl: null,
       active: true,
     });
 

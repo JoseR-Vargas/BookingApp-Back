@@ -12,7 +12,9 @@ import {
 import { AdminKeyGuard } from '../auth/admin-key.guard';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import {
+  parseOptionalPhotoDataUrl,
   parseProfessionalCreate,
+  parseProfessionalPhotoBody,
   parseProfessionalUpdate,
   parseServiceCreate,
   parseServiceUpdate,
@@ -44,7 +46,9 @@ export class AdminController {
 
   @Post('professionals')
   async createProfessional(@Body() body: unknown): Promise<AdminProfessional> {
-    return this.catalogAdmin.createProfessional(parseProfessionalCreate(body));
+    const input = parseProfessionalCreate(body);
+    const photo = parseOptionalPhotoDataUrl(body);
+    return this.catalogAdmin.createProfessional(input, photo);
   }
 
   @Patch('professionals/:id')
@@ -56,6 +60,22 @@ export class AdminController {
       id,
       parseProfessionalUpdate(body),
     );
+  }
+
+  @Put('professionals/:id/photo')
+  setProfessionalPhoto(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<AdminProfessional> {
+    return this.catalogAdmin.setProfessionalPhoto(
+      id,
+      parseProfessionalPhotoBody(body),
+    );
+  }
+
+  @Delete('professionals/:id/photo')
+  removeProfessionalPhoto(@Param('id') id: string): Promise<AdminProfessional> {
+    return this.catalogAdmin.removeProfessionalPhoto(id);
   }
 
   /** Soft delete: the professional stays in the database, inactive. */

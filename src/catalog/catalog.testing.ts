@@ -20,14 +20,32 @@ const matches = (doc: Doc, filter: Filter): boolean =>
     return doc[key] === expected;
   });
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+/** Keeps Dates and binary data intact, like a real Mongo round trip. */
+const clone = <T>(value: T): T => structuredClone(value);
 
-/** Thenable-free query double: `.sort().lean().exec()` in any combination. */
+/** Emulates the `-photo.data` projection; other projections are ignored. */
+const project = <T>(value: T, projection: string): T => {
+  if (projection !== '-photo.data') return value;
+  const strip = (doc: Doc) => {
+    const photo = doc?.photo as Doc | null | undefined;
+    if (photo) delete photo.data;
+  };
+  if (Array.isArray(value)) value.forEach(strip);
+  else if (value) strip(value as Doc);
+  return value;
+};
+
+/** Thenable-free query double: `.sort().select().lean().exec()` in any order. */
 const query = <T>(run: () => T) => {
+  let projection = '';
   const chain = {
     sort: () => chain,
     lean: () => chain,
-    exec: () => Promise.resolve(run()),
+    select: (spec: string) => {
+      projection = spec;
+      return chain;
+    },
+    exec: () => Promise.resolve(project(run(), projection)),
   };
   return chain;
 };
