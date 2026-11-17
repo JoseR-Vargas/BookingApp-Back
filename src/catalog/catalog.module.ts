@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
 import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogController } from './catalog.controller';
 import { CatalogService } from './catalog.service';
@@ -19,6 +20,8 @@ import { ServiceRecord, ServiceSchema } from './schemas/service.schema';
       { name: ProfessionalRecord.name, schema: ProfessionalSchema },
       { name: ServiceRecord.name, schema: ServiceSchema },
       { name: BusinessSettingsRecord.name, schema: BusinessSettingsSchema },
+      // Read-only, for the professional id-reuse and delete guards.
+      { name: Booking.name, schema: BookingSchema },
     ]),
   ],
   controllers: [CatalogController],

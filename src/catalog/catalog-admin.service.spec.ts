@@ -14,6 +14,7 @@ describe('CatalogAdminService', () => {
       fake.professionalModel,
       fake.serviceModel,
       fake.settingsModel,
+      fake.bookingModel,
     );
   });
 

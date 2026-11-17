@@ -47,6 +47,7 @@ describe('Admin HTTP contract', () => {
             fake.professionalModel,
             fake.serviceModel,
             fake.settingsModel,
+            fake.bookingModel,
           ),
         },
         {
