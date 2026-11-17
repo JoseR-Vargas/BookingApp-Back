@@ -108,6 +108,16 @@ describe('configureApp', () => {
     expect(res.body).toEqual({ rawLength: payload.length, parsed: true });
   });
 
+  it('allows the X-Admin-Username header in CORS preflights', async () => {
+    const res = await request(app.getHttpServer())
+      .options('/api/admin/session')
+      .set('Origin', 'http://localhost:3000')
+      .set('Access-Control-Request-Method', 'GET')
+      .set('Access-Control-Request-Headers', 'authorization,x-admin-username');
+    const allowed = String(res.headers['access-control-allow-headers'] ?? '');
+    expect(allowed.toLowerCase()).toContain('x-admin-username');
+  });
+
   it('keeps the /api prefix', async () => {
     await request(app.getHttpServer()).get('/api/branding').expect(200);
     await request(app.getHttpServer()).get('/branding').expect(404);

@@ -125,6 +125,13 @@ describe('DELETE /api/admin/professionals/:id/permanent', () => {
     expect(messageOf(res)).toBe('Professional "nobody" not found');
   });
 
+  it('treats an odd id as plain text: 404 and nothing is deleted', async () => {
+    await setup({});
+    const res = await del('%20x%24ne').set(auth).expect(404);
+    expect(messageOf(res)).toBe('Professional " x$ne" not found');
+    expect(ids()).toEqual(['ana', 'luis']);
+  });
+
   describe('future confirmed bookings', () => {
     it('blocks with the singular message for one booking', async () => {
       await setup({ bookings: [booking('ana', FUTURE)] });
@@ -225,6 +232,17 @@ describe('DELETE /api/admin/professionals/:id/permanent', () => {
   describe('id reuse', () => {
     it('does not reuse the id of a deleted professional that has bookings', async () => {
       await setup({ bookings: [booking('ana', PAST)] });
+      await del().set(auth).expect(200);
+      const res = await server()
+        .post('/api/admin/professionals')
+        .set(auth)
+        .send({ name: 'Ana' })
+        .expect(201);
+      expect((res.body as { id: string }).id).toBe('ana-2');
+    });
+
+    it('does not reuse the id when only a cancelled booking still references it', async () => {
+      await setup({ bookings: [booking('ana', FUTURE, 'cancelled')] });
       await del().set(auth).expect(200);
       const res = await server()
         .post('/api/admin/professionals')
