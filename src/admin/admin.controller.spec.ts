@@ -152,6 +152,7 @@ describe('AdminController', () => {
     const saved: WeeklySchedule = {
       weekly: weekly as WeeklySchedule['weekly'],
       slotIntervalMinutes: 30,
+      startIntervalMinutes: 30,
     };
 
     it('saves, then reports the affected bookings without blocking the save', async () => {
@@ -160,12 +161,31 @@ describe('AdminController', () => {
 
       const result = await controller.saveSchedule({ weekly });
 
-      expect(admin.saveSchedule).toHaveBeenCalledWith(weekly);
+      expect(admin.saveSchedule).toHaveBeenCalledWith(weekly, undefined);
       expect(impact.countAffected).toHaveBeenCalledWith(
         saved,
         expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       );
       expect(result).toEqual({ schedule: saved, affectedBookings: 4 });
+    });
+
+    it('passes a given start interval to the save', async () => {
+      admin.saveSchedule.mockResolvedValue({
+        ...saved,
+        startIntervalMinutes: 180,
+      });
+      impact.countAffected.mockResolvedValue(0);
+
+      await controller.saveSchedule({ weekly, startIntervalMinutes: 180 });
+
+      expect(admin.saveSchedule).toHaveBeenCalledWith(weekly, 180);
+    });
+
+    it('answers 400 for an invalid start interval and saves nothing', async () => {
+      await expect(
+        controller.saveSchedule({ weekly, startIntervalMinutes: 45 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(admin.saveSchedule).not.toHaveBeenCalled();
     });
 
     it('answers 400 for an invalid schedule and saves nothing', async () => {

@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AdminSessionController } from '../auth/admin-session.controller';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
+import { CatalogController } from '../catalog/catalog.controller';
 import { CatalogService } from '../catalog/catalog.service';
 import { createFakeCatalog, createFakeModel } from '../catalog/catalog.testing';
 import { AdminController } from './admin.controller';
@@ -38,7 +39,7 @@ describe('Admin HTTP contract', () => {
       },
     ]);
     const moduleRef = await Test.createTestingModule({
-      controllers: [AdminController, AdminSessionController],
+      controllers: [AdminController, AdminSessionController, CatalogController],
       providers: [
         { provide: CatalogService, useValue: fake.catalog },
         {
@@ -263,5 +264,63 @@ describe('Admin HTTP contract', () => {
       .set(auth)
       .expect(200);
     expect(catalog.body.schedule.weekly[6]).toEqual({ closed: true });
+  });
+
+  describe('PUT /api/admin/schedule start interval', () => {
+    const weekly = {
+      0: { closed: true },
+      1: { closed: false, open: '09:00', close: '20:00' },
+      2: { closed: false, open: '09:00', close: '20:00' },
+      3: { closed: false, open: '09:00', close: '20:00' },
+      4: { closed: false, open: '09:00', close: '20:00' },
+      5: { closed: false, open: '09:00', close: '20:00' },
+      6: { closed: true },
+    };
+    const MESSAGE =
+      'El intervalo entre turnos debe ser un múltiplo de 30 minutos, entre 30 y 480.';
+    const put = (body: object) =>
+      request(app.getHttpServer())
+        .put('/api/admin/schedule')
+        .set(auth)
+        .send(body);
+
+    it('stores and returns 180, keeps it when omitted, and both catalogs show it', async () => {
+      const saved = await put({ weekly, startIntervalMinutes: 180 }).expect(
+        200,
+      );
+      expect(saved.body.schedule).toEqual({
+        weekly,
+        slotIntervalMinutes: 30,
+        startIntervalMinutes: 180,
+      });
+
+      const omitted = await put({ weekly }).expect(200);
+      expect(omitted.body.schedule.startIntervalMinutes).toBe(180);
+
+      const publicCatalog = await request(app.getHttpServer())
+        .get('/api/catalog')
+        .expect(200);
+      expect(publicCatalog.body.schedule.startIntervalMinutes).toBe(180);
+      const adminCatalog = await request(app.getHttpServer())
+        .get('/api/admin/catalog')
+        .set(auth)
+        .expect(200);
+      expect(adminCatalog.body.schedule.startIntervalMinutes).toBe(180);
+    });
+
+    it.each([45, 0, 500, 'abc', null, 1.5])(
+      'rejects %p with the exact message and keeps the stored value',
+      async (value) => {
+        const res = await put({ weekly, startIntervalMinutes: value }).expect(
+          400,
+        );
+        expect(res.body.message).toBe(MESSAGE);
+
+        const catalog = await request(app.getHttpServer())
+          .get('/api/catalog')
+          .expect(200);
+        expect(catalog.body.schedule.startIntervalMinutes).toBe(180);
+      },
+    );
   });
 });

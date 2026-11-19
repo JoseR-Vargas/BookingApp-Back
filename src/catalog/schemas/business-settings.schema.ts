@@ -17,6 +17,10 @@ export class BusinessSettingsRecord {
   /** Fixed at 30; the admin cannot change it. */
   @Prop({ type: Number, default: 30 })
   slotIntervalMinutes: number;
+
+  /** Minutes between the start times offered to the public. A multiple of 30. */
+  @Prop({ type: Number, default: 30 })
+  startIntervalMinutes: number;
 }
 
 export const BusinessSettingsSchema = SchemaFactory.createForClass(

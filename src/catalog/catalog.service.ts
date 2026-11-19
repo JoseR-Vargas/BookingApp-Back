@@ -138,6 +138,7 @@ export class CatalogService implements OnModuleInit {
       {
         weekly: SCHEDULE.weekly,
         slotIntervalMinutes: SCHEDULE.slotIntervalMinutes,
+        startIntervalMinutes: SCHEDULE.startIntervalMinutes,
       },
     );
   }
@@ -193,6 +194,9 @@ export class CatalogService implements OnModuleInit {
       ? {
           weekly: stored.weekly,
           slotIntervalMinutes: stored.slotIntervalMinutes,
+          // Documents stored before the field existed read as 30.
+          startIntervalMinutes:
+            stored.startIntervalMinutes ?? SCHEDULE.startIntervalMinutes,
         }
       : SCHEDULE;
   }

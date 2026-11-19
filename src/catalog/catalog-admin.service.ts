@@ -246,20 +246,38 @@ export class CatalogAdminService {
     return found !== null;
   }
 
-  /** Replaces the weekly schedule; the slot interval stays fixed. */
+  /**
+   * Replaces the weekly schedule; the occupancy slot interval stays fixed.
+   * An undefined `startIntervalMinutes` keeps the stored value.
+   */
   async saveSchedule(
     weekly: Record<DayOfWeek, DaySchedule>,
+    startIntervalMinutes?: number,
   ): Promise<WeeklySchedule> {
     const slotIntervalMinutes = SCHEDULE.slotIntervalMinutes;
-    await this.settingsModel
+    const stored = await this.settingsModel
       .findOneAndUpdate(
         { key: SCHEDULE_KEY },
-        { $set: { weekly, slotIntervalMinutes } },
+        {
+          $set: {
+            weekly,
+            slotIntervalMinutes,
+            ...(startIntervalMinutes === undefined
+              ? {}
+              : { startIntervalMinutes }),
+          },
+        },
         { upsert: true, new: true },
       )
-      .lean()
+      .lean<BusinessSettingsRecord | null>()
       .exec();
-    return { weekly, slotIntervalMinutes };
+    return {
+      weekly,
+      slotIntervalMinutes,
+      // A document stored before the field existed reads as 30.
+      startIntervalMinutes:
+        stored?.startIntervalMinutes ?? SCHEDULE.startIntervalMinutes,
+    };
   }
 
   /**

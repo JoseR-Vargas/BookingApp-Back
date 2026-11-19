@@ -13,7 +13,7 @@ import { EmailService } from '../email/email.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { createFakeCatalog } from '../catalog/catalog.testing';
 import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
-import { Service } from '../catalog/catalog.config';
+import { SCHEDULE, Service } from '../catalog/catalog.config';
 import { generateCancelToken, hashCancelToken } from './cancellation';
 
 const SERVICES: Service[] = [
@@ -1471,6 +1471,29 @@ describe('BookingsService', () => {
           },
         },
       ]);
+    });
+  });
+
+  describe('start interval', () => {
+    beforeEach(() => {
+      jest
+        .spyOn(mockCatalogService, 'getSchedule')
+        .mockResolvedValue({ ...SCHEDULE, startIntervalMinutes: 180 });
+    });
+
+    it('rejects a start that is not offered with the usual validation error', async () => {
+      await expect(
+        service.create({ ...mockBookingDto, time: '10:00' }),
+      ).rejects.toThrow(
+        'Error de validación: el horario 10:00 no está disponible para Servicio Básico el 2026-03-25',
+      );
+      expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('accepts an offered start', async () => {
+      await service.create({ ...mockBookingDto, time: '12:00' });
+
+      expect(savedDoc().slots).toEqual(['12:00', '12:30']);
     });
   });
 });

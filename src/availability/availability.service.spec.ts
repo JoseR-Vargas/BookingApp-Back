@@ -220,4 +220,61 @@ describe('AvailabilityService', () => {
     ]);
     expect(bookingModel.find).not.toHaveBeenCalled();
   });
+
+  describe('start interval', () => {
+    const alexSlots = async (serviceId: string) => {
+      const result = await service.getAvailability('2026-10-19', [serviceId]);
+      return result.professionals.find((p) => p.id === 'alex-garcia')!.slots;
+    };
+
+    beforeEach(() => {
+      fake.settingsModel.docs[0].startIntervalMinutes = 180;
+      fake.serviceModel.docs.find(
+        (d) => d.id === 'servicio-premium',
+      )!.duration = 180;
+    });
+
+    it('offers only every 180 minutes from opening for a 30-minute service', async () => {
+      expect(await alexSlots('consulta-inicial')).toEqual([
+        '09:00',
+        '12:00',
+        '15:00',
+        '18:00',
+      ]);
+    });
+
+    it('offers only the starts where a 3-hour service fits', async () => {
+      expect(await alexSlots('servicio-premium')).toEqual([
+        '09:00',
+        '12:00',
+        '15:00',
+      ]);
+    });
+
+    it('still excludes offered starts whose blocks are occupied', async () => {
+      bookings = [{ professional: { id: 'alex-garcia' }, slots: ['12:30'] }];
+
+      expect(await alexSlots('consulta-inicial')).toEqual([
+        '09:00',
+        '12:00',
+        '15:00',
+        '18:00',
+      ]);
+      bookings = [{ professional: { id: 'alex-garcia' }, slots: ['12:00'] }];
+
+      expect(await alexSlots('consulta-inicial')).toEqual([
+        '09:00',
+        '15:00',
+        '18:00',
+      ]);
+    });
+
+    it('reads a stored document without the field as 30', async () => {
+      delete fake.settingsModel.docs[0].startIntervalMinutes;
+
+      expect(await alexSlots('consulta-inicial')).toEqual(
+        times('09:00', '19:30'),
+      );
+    });
+  });
 });

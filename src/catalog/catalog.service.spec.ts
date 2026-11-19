@@ -148,6 +148,7 @@ describe('CatalogService', () => {
       expect(schedule.slotIntervalMinutes).toBe(30);
       expect(Object.keys(schedule).sort()).toEqual([
         'slotIntervalMinutes',
+        'startIntervalMinutes',
         'weekly',
       ]);
     });
@@ -179,6 +180,33 @@ describe('CatalogService', () => {
 
       expect(schedule.weekly[0]).toEqual({ closed: true });
       expect(schedule.slotIntervalMinutes).toBe(30);
+    });
+  });
+
+  describe('startIntervalMinutes', () => {
+    it('is seeded as 30 and returned by both catalogs', async () => {
+      expect(fake.settingsModel.docs[0].startIntervalMinutes).toBe(30);
+      expect((await service.getCatalog()).schedule.startIntervalMinutes).toBe(
+        30,
+      );
+      expect(
+        (await service.getAdminCatalog()).schedule.startIntervalMinutes,
+      ).toBe(30);
+    });
+
+    it('returns the stored value', async () => {
+      fake.settingsModel.docs[0].startIntervalMinutes = 180;
+
+      expect((await service.getSchedule()).startIntervalMinutes).toBe(180);
+    });
+
+    it('reads a stored document without the field as 30', async () => {
+      delete fake.settingsModel.docs[0].startIntervalMinutes;
+
+      expect((await service.getSchedule()).startIntervalMinutes).toBe(30);
+      expect((await service.getCatalog()).schedule.startIntervalMinutes).toBe(
+        30,
+      );
     });
   });
 

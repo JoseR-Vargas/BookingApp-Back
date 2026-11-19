@@ -4,6 +4,7 @@ import {
   parseProfessionalUpdate,
   parseServiceCreate,
   parseServiceUpdate,
+  parseStartInterval,
   parseWeeklySchedule,
   slugify,
 } from './catalog-validation';
@@ -321,5 +322,47 @@ describe('parseWeeklySchedule', () => {
       () => parseWeeklySchedule({ weekly: { ...validWeekly(), 1: 'open' } }),
       /day 1 must be an object/,
     );
+  });
+
+  describe('parseStartInterval', () => {
+    const MESSAGE =
+      'El intervalo entre turnos debe ser un múltiplo de 30 minutos, entre 30 y 480.';
+
+    it('returns undefined when the field is absent', () => {
+      expect(parseStartInterval({ weekly: validWeekly() })).toBeUndefined();
+      expect(parseStartInterval({ startIntervalMinutes: undefined })).toBe(
+        undefined,
+      );
+    });
+
+    it.each([30, 60, 180, 480])('accepts %p', (value) => {
+      expect(parseStartInterval({ startIntervalMinutes: value })).toBe(value);
+    });
+
+    it.each([
+      45,
+      0,
+      500,
+      510,
+      -30,
+      1.5,
+      30.5,
+      NaN,
+      Infinity,
+      'abc',
+      '60',
+      null,
+      true,
+      [],
+    ])('rejects %p with the exact message', (value) => {
+      let error: unknown;
+      try {
+        parseStartInterval({ startIntervalMinutes: value });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as BadRequestException).message).toBe(MESSAGE);
+    });
   });
 });

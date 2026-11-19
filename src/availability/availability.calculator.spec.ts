@@ -4,6 +4,7 @@ import {
   dayOfWeekFromIsoDate,
   freeStartTimes,
   occupiedSlots,
+  offeredStarts,
   slotsRequired,
   windowSlots,
 } from './availability.calculator';
@@ -83,6 +84,7 @@ describe('availability.calculator', () => {
           2: { closed: false, open: '09:30', close: '12:00' },
         },
         slotIntervalMinutes: 30,
+        startIntervalMinutes: 30,
       };
 
       expect(buildDaySlots(2, schedule)).toEqual([
@@ -313,6 +315,75 @@ describe('availability.calculator', () => {
     it('rejects an off-grid start such as 09:15', () => {
       expect(windowSlots(weekday, '09:15', 1, INTERVAL)).toBeNull();
       expect(freeAfter([], 20)).not.toContain('09:15');
+    });
+  });
+
+  describe('offeredStarts', () => {
+    const withInterval = (
+      startIntervalMinutes: number,
+      weekly: WeeklySchedule['weekly'] = SCHEDULE.weekly,
+    ): WeeklySchedule => ({ ...SCHEDULE, weekly, startIntervalMinutes });
+
+    it('with the default interval of 30 equals the 30-minute grid', () => {
+      expect(offeredStarts(1, withInterval(30))).toEqual(WEEKDAY_SLOTS);
+      expect(offeredStarts(6, withInterval(30))).toEqual(SATURDAY_SLOTS);
+    });
+
+    it('offers every 60 minutes from opening', () => {
+      expect(offeredStarts(6, withInterval(60))).toEqual([
+        '09:00',
+        '10:00',
+        '11:00',
+        '12:00',
+        '13:00',
+        '14:00',
+        '15:00',
+        '16:00',
+        '17:00',
+      ]);
+    });
+
+    it('offers every 180 minutes from opening', () => {
+      expect(offeredStarts(1, withInterval(180))).toEqual([
+        '09:00',
+        '12:00',
+        '15:00',
+        '18:00',
+      ]);
+    });
+
+    it('counts from an opening that is not on the hour', () => {
+      const weekly = {
+        ...SCHEDULE.weekly,
+        1: { closed: false as const, open: '09:30', close: '13:00' },
+      };
+      expect(offeredStarts(1, withInterval(60, weekly))).toEqual([
+        '09:30',
+        '10:30',
+        '11:30',
+        '12:30',
+      ]);
+    });
+
+    it('returns nothing for a closed day or invalid hours', () => {
+      expect(offeredStarts(0, withInterval(60))).toEqual([]);
+      const weekly = {
+        ...SCHEDULE.weekly,
+        1: { closed: false as const, open: 'abc', close: '13:00' },
+      };
+      expect(offeredStarts(1, withInterval(60, weekly))).toEqual([]);
+    });
+
+    it('can offer a last start that leaves no room for the service', () => {
+      const offered = offeredStarts(1, withInterval(180));
+      expect(offered).toContain('18:00');
+      const free = freeStartTimes(
+        buildDaySlots(1, SCHEDULE),
+        new Set(),
+        slotsRequired(180, INTERVAL),
+        INTERVAL,
+      ).filter((time) => offered.includes(time));
+      expect(free).toEqual(['09:00', '12:00', '15:00']);
     });
   });
 });

@@ -16,6 +16,7 @@ const schedule: WeeklySchedule = {
     6: { closed: true },
   },
   slotIntervalMinutes: 30,
+  startIntervalMinutes: 30,
 };
 
 // 2026-10-19 is a Monday, 2026-10-18 a Sunday, 2026-10-24 a Saturday.
@@ -79,6 +80,17 @@ describe('isOutsideSchedule', () => {
         schedule,
       ),
     ).toBe(true);
+  });
+
+  it('does not count a booking that is off the offered starts', () => {
+    // 10:00 is not an offered start with 180 minutes from the 09:30 opening.
+    const sparse = { ...schedule, startIntervalMinutes: 180 };
+    expect(
+      isOutsideSchedule(
+        { date: '2026-10-19', time: '10:00', slots: ['10:00', '10:30'] },
+        sparse,
+      ),
+    ).toBe(false);
   });
 
   it('falls back to the start time for bookings without slots', () => {

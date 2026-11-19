@@ -18,6 +18,7 @@ import {
   parseProfessionalUpdate,
   parseServiceCreate,
   parseServiceUpdate,
+  parseStartInterval,
   parseWeeklySchedule,
 } from '../catalog/catalog-validation';
 import { WeeklySchedule } from '../catalog/catalog.config';
@@ -138,6 +139,7 @@ export class AdminController {
   ): Promise<{ schedule: WeeklySchedule; affectedBookings: number }> {
     const schedule = await this.catalogAdmin.saveSchedule(
       parseWeeklySchedule(body),
+      parseStartInterval(body),
     );
     const affectedBookings = await this.scheduleImpact.countAffected(
       schedule,

@@ -28,6 +28,7 @@ import {
   buildDaySlots,
   dayOfWeekFromIsoDate,
   occupiedSlots,
+  offeredStarts,
   slotsRequired,
   windowSlots,
 } from '../availability/availability.calculator';
@@ -568,6 +569,9 @@ export class BookingsService {
       return null;
     }
     const schedule = await this.catalogService.getSchedule();
+    if (!offeredStarts(dayOfWeek, schedule).includes(time)) {
+      return null;
+    }
     const interval = schedule.slotIntervalMinutes;
     return windowSlots(
       buildDaySlots(dayOfWeek, schedule),

@@ -31,6 +31,8 @@ export type DaySchedule =
 export interface WeeklySchedule {
   weekly: Record<DayOfWeek, DaySchedule>;
   slotIntervalMinutes: number;
+  /** Minutes between the start times offered to the public; a multiple of 30. */
+  startIntervalMinutes: number;
 }
 
 export interface Catalog {
@@ -113,4 +115,5 @@ export const SCHEDULE: WeeklySchedule = {
     6: { closed: false, open: '09:00', close: '18:00' },
   },
   slotIntervalMinutes: 30,
+  startIntervalMinutes: 30,
 };

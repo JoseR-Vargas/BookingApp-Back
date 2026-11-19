@@ -229,6 +229,33 @@ export function parseWeeklySchedule(
   return result;
 }
 
+export const SCHEDULE_MESSAGES = {
+  invalidStartInterval:
+    'El intervalo entre turnos debe ser un múltiplo de 30 minutos, entre 30 y 480.',
+} as const;
+
+/**
+ * Optional `startIntervalMinutes` of PUT /admin/schedule: `undefined` when
+ * absent (keep the stored value), otherwise an integer multiple of 30 in
+ * [30, 480] or a 400.
+ */
+export function parseStartInterval(input: unknown): number | undefined {
+  const { startIntervalMinutes: value } = asBody(input);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 30 ||
+    value > 480 ||
+    value % 30 !== 0
+  ) {
+    return fail(SCHEDULE_MESSAGES.invalidStartInterval);
+  }
+  return value;
+}
+
 export const PHOTO_MESSAGES = {
   invalidPhoto: 'La foto debe ser PNG, JPG o WebP de hasta 200 KB.',
 } as const;
