@@ -7,7 +7,10 @@
   inside the opening hours. `startIntervalMinutes` is a multiple of 30 between 30 and 480,
   stored in `business_settings` next to the hours (`PUT /api/admin/schedule` accepts it as an
   optional field; when omitted the stored value is kept). A document stored without the field
-  reads as 30. `offeredStarts` in `src/availability/availability.calculator.ts` is the single
+  reads as 30. A day can also carry its own `starts` list (`HH:mm`, on the 30-minute grid, inside
+  `[open, close)`, stored sorted): that day offers exactly those starts and ignores the interval;
+  a day without `starts` follows the interval. `PUT /api/admin/schedule` replaces the whole week,
+  so a day sent without `starts` loses its list. `offeredStarts` in `src/availability/availability.calculator.ts` is the single
   source of this rule: availability, booking creation and booking updates all go through it.
   The hours
   are stored per weekday as `HH:mm` strings in the `business_settings` collection and edited

@@ -4,7 +4,9 @@ import { Model } from 'mongoose';
 import {
   Catalog,
   PROFESSIONALS,
+  PUBLIC_AVAILABILITY,
   Professional,
+  PublicAvailabilitySettings,
   SCHEDULE,
   SERVICES,
   Service,
@@ -33,6 +35,7 @@ export interface AdminCatalog {
   professionals: AdminProfessional[];
   services: AdminService[];
   schedule: WeeklySchedule;
+  publicAvailability: PublicAvailabilitySettings;
 }
 
 /** Projection that keeps the photo bytes out of every professional query. */
@@ -163,28 +166,40 @@ export class CatalogService implements OnModuleInit {
 
   /** Admin catalog: everything, inactive items included. */
   async getAdminCatalog(): Promise<AdminCatalog> {
-    const [professionals, services, schedule] = await Promise.all([
-      this.professionalModel
-        .find({})
-        .select(WITHOUT_PHOTO_BYTES)
-        .sort(CREATION_ORDER)
-        .lean<ProfessionalRecord[]>()
-        .exec(),
-      this.serviceModel
-        .find({})
-        .sort(CREATION_ORDER)
-        .lean<ServiceRecord[]>()
-        .exec(),
-      this.getSchedule(),
-    ]);
+    const [professionals, services, schedule, publicAvailability] =
+      await Promise.all([
+        this.professionalModel
+          .find({})
+          .select(WITHOUT_PHOTO_BYTES)
+          .sort(CREATION_ORDER)
+          .lean<ProfessionalRecord[]>()
+          .exec(),
+        this.serviceModel
+          .find({})
+          .sort(CREATION_ORDER)
+          .lean<ServiceRecord[]>()
+          .exec(),
+        this.getSchedule(),
+        this.getPublicAvailability(),
+      ]);
     return {
       professionals: professionals.map(toAdminProfessional),
       services: services.map(toAdminService),
       schedule,
+      publicAvailability,
     };
   }
 
   /** The weekly schedule; the seeded defaults if it was never stored. */
+  /** Public availability page settings; the default (off) when none is stored. */
+  async getPublicAvailability(): Promise<PublicAvailabilitySettings> {
+    const stored = await this.settingsModel
+      .findOne({ key: SCHEDULE_KEY })
+      .lean<BusinessSettingsRecord | null>()
+      .exec();
+    return stored?.publicAvailability ?? { ...PUBLIC_AVAILABILITY };
+  }
+
   async getSchedule(): Promise<WeeklySchedule> {
     const stored = await this.settingsModel
       .findOne({ key: SCHEDULE_KEY })

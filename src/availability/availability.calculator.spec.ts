@@ -324,6 +324,42 @@ describe('availability.calculator', () => {
       weekly: WeeklySchedule['weekly'] = SCHEDULE.weekly,
     ): WeeklySchedule => ({ ...SCHEDULE, weekly, startIntervalMinutes });
 
+    describe('per-day starts', () => {
+      const withStarts = (
+        starts: string[] | undefined,
+        interval = 30,
+      ): WeeklySchedule =>
+        withInterval(interval, {
+          ...SCHEDULE.weekly,
+          1: { closed: false, open: '09:00', close: '20:00', starts },
+        });
+
+      it('offers exactly the listed starts of that day, lunch break included', () => {
+        expect(
+          offeredStarts(1, withStarts(['09:00', '10:30', '15:00', '16:30'])),
+        ).toEqual(['09:00', '10:30', '15:00', '16:30']);
+      });
+
+      it('wins over the global interval, and other days keep the interval rule', () => {
+        const schedule = withStarts(['10:00'], 180);
+        expect(offeredStarts(1, schedule)).toEqual(['10:00']);
+        expect(offeredStarts(6, schedule)).toEqual(['09:00', '12:00', '15:00']);
+      });
+
+      it('falls back to the interval rule when the day has no starts', () => {
+        expect(offeredStarts(1, withStarts(undefined, 180))).toEqual([
+          '09:00',
+          '12:00',
+          '15:00',
+          '18:00',
+        ]);
+      });
+
+      it('offers nothing on a closed day', () => {
+        expect(offeredStarts(0, withStarts(['10:00']))).toEqual([]);
+      });
+    });
+
     it('with the default interval of 30 equals the 30-minute grid', () => {
       expect(offeredStarts(1, withInterval(30))).toEqual(WEEKDAY_SLOTS);
       expect(offeredStarts(6, withInterval(30))).toEqual(SATURDAY_SLOTS);

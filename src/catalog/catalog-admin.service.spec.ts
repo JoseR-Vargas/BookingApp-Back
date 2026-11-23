@@ -286,4 +286,47 @@ describe('CatalogAdminService', () => {
       expect(fake.settingsModel.docs[0].key).toBe('schedule');
     });
   });
+
+  describe('savePublicAvailability', () => {
+    it('stores the settings next to the schedule without touching it', async () => {
+      const saved = await admin.savePublicAvailability({
+        enabled: true,
+        days: 10,
+        serviceIds: ['servicio-basico'],
+      });
+
+      expect(saved).toEqual({
+        enabled: true,
+        days: 10,
+        serviceIds: ['servicio-basico'],
+      });
+      expect(fake.settingsModel.docs[0].publicAvailability).toEqual(saved);
+      expect(fake.settingsModel.docs[0].weekly).toEqual(SCHEDULE.weekly);
+    });
+
+    it('rejects a service id that does not exist, saving nothing', async () => {
+      await expect(
+        admin.savePublicAvailability({
+          enabled: true,
+          days: 7,
+          serviceIds: ['servicio-basico', 'nope'],
+        }),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Alguno de los servicios publicados no existe.',
+        ),
+      );
+      expect(fake.settingsModel.docs[0].publicAvailability).toBeUndefined();
+    });
+
+    it('accepts null (all services) without looking services up', async () => {
+      await expect(
+        admin.savePublicAvailability({
+          enabled: true,
+          days: 7,
+          serviceIds: null,
+        }),
+      ).resolves.toEqual({ enabled: true, days: 7, serviceIds: null });
+    });
+  });
 });

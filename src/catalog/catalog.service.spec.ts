@@ -210,6 +210,38 @@ describe('CatalogService', () => {
     });
   });
 
+  describe('publicAvailability settings', () => {
+    it('reads as disabled, 7 days, all services when the document has none', async () => {
+      expect(await service.getPublicAvailability()).toEqual({
+        enabled: false,
+        days: 7,
+        serviceIds: null,
+      });
+      expect((await service.getAdminCatalog()).publicAvailability).toEqual({
+        enabled: false,
+        days: 7,
+        serviceIds: null,
+      });
+    });
+
+    it('returns the stored settings, and keeps them out of the public catalog', async () => {
+      fake.settingsModel.docs[0].publicAvailability = {
+        enabled: true,
+        days: 3,
+        serviceIds: ['servicio-basico'],
+      };
+
+      expect((await service.getAdminCatalog()).publicAvailability).toEqual({
+        enabled: true,
+        days: 3,
+        serviceIds: ['servicio-basico'],
+      });
+      expect(await service.getCatalog()).not.toHaveProperty(
+        'publicAvailability',
+      );
+    });
+  });
+
   describe('getAdminCatalog', () => {
     it('includes inactive items with their active flag', async () => {
       fake.professionalModel.docs[1].active = false;

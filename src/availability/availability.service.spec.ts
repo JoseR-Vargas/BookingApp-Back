@@ -221,6 +221,46 @@ describe('AvailabilityService', () => {
     expect(bookingModel.find).not.toHaveBeenCalled();
   });
 
+  describe('starts per day', () => {
+    const alexSlots = async (date: string) =>
+      (
+        await service.getAvailability(date, ['consulta-inicial'])
+      ).professionals.find((p) => p.id === 'alex-garcia')!.slots;
+
+    it('offers the Monday list only on Monday; Tuesday keeps its own rule', async () => {
+      const weekly = fake.settingsModel.docs[0].weekly;
+      weekly[1] = {
+        closed: false,
+        open: '09:00',
+        close: '20:00',
+        starts: ['09:00', '12:00', '16:30'],
+      };
+
+      expect(await alexSlots('2026-10-19')).toEqual([
+        '09:00',
+        '12:00',
+        '16:30',
+      ]);
+      expect((await alexSlots('2026-10-20')).slice(0, 3)).toEqual([
+        '09:00',
+        '09:30',
+        '10:00',
+      ]);
+    });
+
+    it('still excludes a listed start that is occupied', async () => {
+      fake.settingsModel.docs[0].weekly[1] = {
+        closed: false,
+        open: '09:00',
+        close: '20:00',
+        starts: ['09:00', '12:00'],
+      };
+      bookings = [{ professional: { id: 'alex-garcia' }, slots: ['12:00'] }];
+
+      expect(await alexSlots('2026-10-19')).toEqual(['09:00']);
+    });
+  });
+
   describe('start interval', () => {
     const alexSlots = async (serviceId: string) => {
       const result = await service.getAvailability('2026-10-19', [serviceId]);

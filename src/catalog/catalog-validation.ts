@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { ParsedImage, parseImageDataUrl } from '../common/image-data-url';
-import { DayOfWeek, DaySchedule } from './catalog.config';
+import {
+  DayOfWeek,
+  DaySchedule,
+  PublicAvailabilitySettings,
+} from './catalog.config';
 
 /**
  * Manual payload validation for the admin catalog endpoints (the project does
@@ -176,14 +180,48 @@ export function slugify(name: string, fallback: string): string {
 
 /** 'HH:mm' on the 30-minute grid, from 00:00 to 23:30. */
 const GRID_TIME = /^([01]\d|2[0-3]):(00|30)$/;
+/** Any 'HH:mm' time; the grid check is a separate (range) error. */
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
+
+const STARTS_MESSAGES = {
+  list: 'Las horas de inicio de cada día deben ser una lista sin repetidos de horas HH:mm.',
+  range:
+    'Las horas de inicio deben estar dentro del horario del día y ser múltiplos de 30 minutos.',
+} as const;
+
+/** Optional per-day `starts`: undefined/null = none; otherwise sorted, validated. */
+function parseStarts(
+  starts: unknown,
+  open: string,
+  close: string,
+): string[] | undefined {
+  if (starts === undefined || starts === null) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(starts) ||
+    starts.length === 0 ||
+    starts.some((time) => typeof time !== 'string' || !HH_MM.test(time)) ||
+    new Set(starts).size !== starts.length
+  ) {
+    return fail(STARTS_MESSAGES.list);
+  }
+  const times = starts as string[];
+  if (
+    times.some((time) => !GRID_TIME.test(time) || time < open || time >= close)
+  ) {
+    return fail(STARTS_MESSAGES.range);
+  }
+  return [...times].sort();
+}
 
 function parseDay(value: unknown, day: DayOfWeek): DaySchedule {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return fail(`day ${day} must be an object`);
   }
-  const { closed, open, close } = value as Body;
+  const { closed, open, close, starts } = value as Body;
   if (typeof closed !== 'boolean') {
     return fail(`day ${day}: closed must be a boolean`);
   }
@@ -204,7 +242,13 @@ function parseDay(value: unknown, day: DayOfWeek): DaySchedule {
   if ((open as string) >= (close as string)) {
     fail(`day ${day}: open must be earlier than close`);
   }
-  return { closed: false, open: open as string, close: close as string };
+  const parsed = parseStarts(starts, open as string, close as string);
+  return {
+    closed: false,
+    open: open as string,
+    close: close as string,
+    ...(parsed ? { starts: parsed } : {}),
+  };
 }
 
 /** Validates `{ weekly }` of PUT /admin/schedule; all 7 days are required. */
@@ -284,3 +328,40 @@ export const parseOptionalPhotoDataUrl = (
     ? null
     : parseImageDataUrl(value, PHOTO_MESSAGES.invalidPhoto);
 };
+
+export const PUBLIC_AVAILABILITY_MESSAGES = {
+  enabled: 'El estado de la página pública debe ser verdadero o falso.',
+  days: 'La cantidad de días debe ser un entero entre 1 y 14.',
+  serviceIds:
+    'Los servicios publicados deben ser null (todos) o una lista sin repetidos con al menos un servicio.',
+} as const;
+
+/** Body of PUT /admin/public-availability: all three fields are required. */
+export function parsePublicAvailability(
+  input: unknown,
+): PublicAvailabilitySettings {
+  const { enabled, days, serviceIds } = asBody(input);
+  if (typeof enabled !== 'boolean') {
+    return fail(PUBLIC_AVAILABILITY_MESSAGES.enabled);
+  }
+  if (
+    typeof days !== 'number' ||
+    !Number.isInteger(days) ||
+    days < 1 ||
+    days > 14
+  ) {
+    return fail(PUBLIC_AVAILABILITY_MESSAGES.days);
+  }
+  if (serviceIds === null) {
+    return { enabled, days, serviceIds: null };
+  }
+  if (
+    !Array.isArray(serviceIds) ||
+    serviceIds.length === 0 ||
+    serviceIds.some((id) => typeof id !== 'string' || id.trim() === '') ||
+    new Set(serviceIds).size !== serviceIds.length
+  ) {
+    return fail(PUBLIC_AVAILABILITY_MESSAGES.serviceIds);
+  }
+  return { enabled, days, serviceIds: serviceIds as string[] };
+}

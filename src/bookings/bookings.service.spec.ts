@@ -1496,4 +1496,37 @@ describe('BookingsService', () => {
       expect(savedDoc().slots).toEqual(['12:00', '12:30']);
     });
   });
+
+  describe('starts per day', () => {
+    beforeEach(() => {
+      // 2026-03-25 is a Wednesday (3): open 09:00-20:00 with a lunch break.
+      jest.spyOn(mockCatalogService, 'getSchedule').mockResolvedValue({
+        ...SCHEDULE,
+        weekly: {
+          ...SCHEDULE.weekly,
+          3: {
+            closed: false,
+            open: '09:00',
+            close: '20:00',
+            starts: ['09:00', '15:00'],
+          },
+        },
+      });
+    });
+
+    it('rejects a start that is not in the day list', async () => {
+      await expect(
+        service.create({ ...mockBookingDto, time: '12:00' }),
+      ).rejects.toThrow(
+        'Error de validación: el horario 12:00 no está disponible para Servicio Básico el 2026-03-25',
+      );
+      expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('accepts a start in the day list', async () => {
+      await service.create({ ...mockBookingDto, time: '15:00' });
+
+      expect(savedDoc().slots).toEqual(['15:00', '15:30']);
+    });
+  });
 });

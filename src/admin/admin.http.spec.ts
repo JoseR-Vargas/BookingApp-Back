@@ -323,4 +323,152 @@ describe('Admin HTTP contract', () => {
       },
     );
   });
+
+  describe('PUT /api/admin/schedule starts per day', () => {
+    const week = (monday: object) => ({
+      0: { closed: true },
+      1: monday,
+      2: { closed: false, open: '09:00', close: '20:00' },
+      3: { closed: false, open: '09:00', close: '20:00' },
+      4: { closed: false, open: '09:00', close: '20:00' },
+      5: { closed: false, open: '09:00', close: '20:00' },
+      6: { closed: true },
+    });
+    const open = { closed: false, open: '09:00', close: '20:00' };
+    const put = (weekly: object) =>
+      request(app.getHttpServer())
+        .put('/api/admin/schedule')
+        .set(auth)
+        .send({ weekly });
+
+    it('stores the starts sorted, both catalogs return them, and an omitted list clears them', async () => {
+      const saved = await put(
+        week({ ...open, starts: ['16:00', '09:00', '12:00'] }),
+      ).expect(200);
+      expect(saved.body.schedule.weekly[1].starts).toEqual([
+        '09:00',
+        '12:00',
+        '16:00',
+      ]);
+      expect(saved.body.schedule.weekly[2]).not.toHaveProperty('starts');
+
+      const publicCatalog = await request(app.getHttpServer())
+        .get('/api/catalog')
+        .expect(200);
+      expect(publicCatalog.body.schedule.weekly[1].starts).toEqual([
+        '09:00',
+        '12:00',
+        '16:00',
+      ]);
+      const adminCatalog = await request(app.getHttpServer())
+        .get('/api/admin/catalog')
+        .set(auth)
+        .expect(200);
+      expect(adminCatalog.body.schedule.weekly[1].starts).toEqual([
+        '09:00',
+        '12:00',
+        '16:00',
+      ]);
+
+      const cleared = await put(week(open)).expect(200);
+      expect(cleared.body.schedule.weekly[1]).not.toHaveProperty('starts');
+    });
+
+    it.each([
+      [
+        [],
+        'Las horas de inicio de cada día deben ser una lista sin repetidos de horas HH:mm.',
+      ],
+      [
+        ['10:00', '10:00'],
+        'Las horas de inicio de cada día deben ser una lista sin repetidos de horas HH:mm.',
+      ],
+      [
+        ['10:15'],
+        'Las horas de inicio deben estar dentro del horario del día y ser múltiplos de 30 minutos.',
+      ],
+      [
+        ['20:00'],
+        'Las horas de inicio deben estar dentro del horario del día y ser múltiplos de 30 minutos.',
+      ],
+    ])('rejects %p with 400', async (starts, message) => {
+      const res = await put(week({ ...open, starts })).expect(400);
+      expect(res.body.message).toBe(message);
+    });
+
+    it('answers 401 without the admin key', async () => {
+      await request(app.getHttpServer())
+        .put('/api/admin/schedule')
+        .send({ weekly: week(open) })
+        .expect(401);
+    });
+  });
+
+  describe('PUT /api/admin/public-availability', () => {
+    const put = (body: object) =>
+      request(app.getHttpServer())
+        .put('/api/admin/public-availability')
+        .set(auth)
+        .send(body);
+
+    it('reads as the default, stores the settings and returns them in the admin catalog', async () => {
+      const before = await request(app.getHttpServer())
+        .get('/api/admin/catalog')
+        .set(auth)
+        .expect(200);
+      expect(before.body.publicAvailability).toEqual({
+        enabled: false,
+        days: 7,
+        serviceIds: null,
+      });
+
+      const saved = await put({
+        enabled: true,
+        days: 5,
+        serviceIds: ['servicio-basico'],
+      }).expect(200);
+      expect(saved.body).toEqual({
+        publicAvailability: {
+          enabled: true,
+          days: 5,
+          serviceIds: ['servicio-basico'],
+        },
+      });
+
+      const after = await request(app.getHttpServer())
+        .get('/api/admin/catalog')
+        .set(auth)
+        .expect(200);
+      expect(after.body.publicAvailability.days).toBe(5);
+    });
+
+    it.each([
+      [
+        { enabled: 'yes', days: 7, serviceIds: null },
+        'El estado de la página pública debe ser verdadero o falso.',
+      ],
+      [
+        { enabled: true, days: 15, serviceIds: null },
+        'La cantidad de días debe ser un entero entre 1 y 14.',
+      ],
+      [
+        { enabled: true, days: 7, serviceIds: [] },
+        'Los servicios publicados deben ser null (todos) o una lista sin repetidos con al menos un servicio.',
+      ],
+      [
+        { enabled: true, days: 7, serviceIds: ['nope'] },
+        'Alguno de los servicios publicados no existe.',
+      ],
+    ])('rejects %j with 400', async (body, message) => {
+      const res = await put(body).expect(400);
+      expect(res.body.message).toBe(message);
+    });
+
+    it('answers 401 without the admin key', async () => {
+      await request(app.getHttpServer())
+        .put('/api/admin/public-availability')
+        .send({ enabled: true, days: 7, serviceIds: null })
+        .expect(401);
+    });
+  });
 });

@@ -68,8 +68,9 @@ export function buildDaySlots(
 }
 
 /**
- * Single source of the start times offered to the public on a day: the grid
- * slots whose offset from opening is a multiple of `startIntervalMinutes`.
+ * Single source of the start times offered to the public on a day: the day's
+ * own `starts` list when the admin set one, otherwise the grid slots whose
+ * offset from opening is a multiple of `startIntervalMinutes`.
  * Occupancy stays on the 30-minute grid; this only chooses which starts exist.
  */
 export function offeredStarts(
@@ -83,6 +84,10 @@ export function offeredStarts(
   const open = toMinutes(day.open);
   if (open === null) {
     return [];
+  }
+  if (day.starts) {
+    const grid = new Set(buildDaySlots(dayOfWeek, schedule));
+    return day.starts.filter((time) => grid.has(time));
   }
   return buildDaySlots(dayOfWeek, schedule).filter(
     (slot) =>

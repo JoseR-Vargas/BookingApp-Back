@@ -1,5 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { DayOfWeek, DaySchedule } from '../catalog.config';
+import {
+  DayOfWeek,
+  DaySchedule,
+  PublicAvailabilitySettings,
+} from '../catalog.config';
 
 /** Key of the single document that holds the weekly schedule. */
 export const SCHEDULE_KEY = 'schedule';
@@ -21,6 +25,10 @@ export class BusinessSettingsRecord {
   /** Minutes between the start times offered to the public. A multiple of 30. */
   @Prop({ type: Number, default: 30 })
   startIntervalMinutes: number;
+
+  /** Public availability page settings; absent on documents stored before it existed. */
+  @Prop({ type: Object })
+  publicAvailability?: PublicAvailabilitySettings;
 }
 
 export const BusinessSettingsSchema = SchemaFactory.createForClass(

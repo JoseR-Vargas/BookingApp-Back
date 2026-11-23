@@ -12,6 +12,7 @@ import { ProfessionalInput, ServiceInput, slugify } from './catalog-validation';
 import {
   DayOfWeek,
   DaySchedule,
+  PublicAvailabilitySettings,
   SCHEDULE,
   WeeklySchedule,
 } from './catalog.config';
@@ -278,6 +279,31 @@ export class CatalogAdminService {
       startIntervalMinutes:
         stored?.startIntervalMinutes ?? SCHEDULE.startIntervalMinutes,
     };
+  }
+
+  /** Stores the public availability page settings next to the schedule. */
+  async savePublicAvailability(
+    settings: PublicAvailabilitySettings,
+  ): Promise<PublicAvailabilitySettings> {
+    if (settings.serviceIds) {
+      const found = await this.serviceModel
+        .find({ id: { $in: settings.serviceIds } })
+        .lean<ServiceRecord[]>()
+        .exec();
+      if (found.length !== settings.serviceIds.length) {
+        throw new BadRequestException(
+          'Alguno de los servicios publicados no existe.',
+        );
+      }
+    }
+    await this.settingsModel
+      .updateOne(
+        { key: SCHEDULE_KEY },
+        { $set: { publicAvailability: settings } },
+        { upsert: true },
+      )
+      .exec();
+    return settings;
   }
 
   /**
