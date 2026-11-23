@@ -18,9 +18,14 @@ import {
   parseProfessionalUpdate,
   parseServiceCreate,
   parseServiceUpdate,
+  parsePublicAvailability,
+  parseStartInterval,
   parseWeeklySchedule,
 } from '../catalog/catalog-validation';
-import { WeeklySchedule } from '../catalog/catalog.config';
+import {
+  PublicAvailabilitySettings,
+  WeeklySchedule,
+} from '../catalog/catalog.config';
 import {
   AdminCatalog,
   AdminProfessional,
@@ -138,11 +143,23 @@ export class AdminController {
   ): Promise<{ schedule: WeeklySchedule; affectedBookings: number }> {
     const schedule = await this.catalogAdmin.saveSchedule(
       parseWeeklySchedule(body),
+      parseStartInterval(body),
     );
     const affectedBookings = await this.scheduleImpact.countAffected(
       schedule,
       currentBusinessDate(),
     );
     return { schedule, affectedBookings };
+  }
+
+  /** Settings of the public availability page (`/disponibilidad`). */
+  @Put('public-availability')
+  async savePublicAvailability(
+    @Body() body: unknown,
+  ): Promise<{ publicAvailability: PublicAvailabilitySettings }> {
+    const publicAvailability = await this.catalogAdmin.savePublicAvailability(
+      parsePublicAvailability(body),
+    );
+    return { publicAvailability };
   }
 }

@@ -26,11 +26,22 @@ export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type DaySchedule =
   | { closed: true }
   /** `open` and `close` are 'HH:mm' wall-clock strings; `close` is exclusive. */
-  | { closed: false; open: string; close: string };
+  | {
+      closed: false;
+      open: string;
+      close: string;
+      /**
+       * Start times offered that day ('HH:mm', on the 30-minute grid, inside
+       * [open, close), sorted). Absent = the global start interval applies.
+       */
+      starts?: string[];
+    };
 
 export interface WeeklySchedule {
   weekly: Record<DayOfWeek, DaySchedule>;
   slotIntervalMinutes: number;
+  /** Minutes between the start times offered to the public; a multiple of 30. */
+  startIntervalMinutes: number;
 }
 
 export interface Catalog {
@@ -100,6 +111,23 @@ export const SERVICES: Service[] = [
   },
 ];
 
+/**
+ * What the public availability page (`/disponibilidad`) shows. `serviceIds: null`
+ * publishes every active service.
+ */
+export interface PublicAvailabilitySettings {
+  enabled: boolean;
+  days: number;
+  serviceIds: string[] | null;
+}
+
+/** Off until the admin turns it on; a stored document without it reads as this. */
+export const PUBLIC_AVAILABILITY: PublicAvailabilitySettings = {
+  enabled: false,
+  days: 7,
+  serviceIds: null,
+};
+
 const WEEKDAY: DaySchedule = { closed: false, open: '09:00', close: '20:00' };
 
 export const SCHEDULE: WeeklySchedule = {
@@ -113,4 +141,5 @@ export const SCHEDULE: WeeklySchedule = {
     6: { closed: false, open: '09:00', close: '18:00' },
   },
   slotIntervalMinutes: 30,
+  startIntervalMinutes: 30,
 };

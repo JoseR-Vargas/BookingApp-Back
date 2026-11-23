@@ -240,7 +240,11 @@ describe('CatalogAdminService', () => {
     it('replaces the stored weekly schedule and keeps the 30 min interval', async () => {
       const saved = await admin.saveSchedule(weekly);
 
-      expect(saved).toEqual({ weekly, slotIntervalMinutes: 30 });
+      expect(saved).toEqual({
+        weekly,
+        slotIntervalMinutes: 30,
+        startIntervalMinutes: 30,
+      });
       expect(fake.settingsModel.docs).toHaveLength(1);
       expect(fake.settingsModel.docs[0]).toMatchObject({
         key: 'schedule',
@@ -252,6 +256,27 @@ describe('CatalogAdminService', () => {
       });
     });
 
+    it('stores and returns a new start interval', async () => {
+      const saved = await admin.saveSchedule(weekly, 180);
+
+      expect(saved).toEqual({
+        weekly,
+        slotIntervalMinutes: 30,
+        startIntervalMinutes: 180,
+      });
+      expect(fake.settingsModel.docs[0].startIntervalMinutes).toBe(180);
+      expect((await fake.catalog.getSchedule()).startIntervalMinutes).toBe(180);
+    });
+
+    it('keeps the stored start interval when none is given', async () => {
+      await admin.saveSchedule(weekly, 180);
+
+      const saved = await admin.saveSchedule(weekly);
+
+      expect(saved.startIntervalMinutes).toBe(180);
+      expect(fake.settingsModel.docs[0].startIntervalMinutes).toBe(180);
+    });
+
     it('creates the settings document when it does not exist yet', async () => {
       fake.settingsModel.docs.splice(0, 1);
 
@@ -259,6 +284,49 @@ describe('CatalogAdminService', () => {
 
       expect(fake.settingsModel.docs).toHaveLength(1);
       expect(fake.settingsModel.docs[0].key).toBe('schedule');
+    });
+  });
+
+  describe('savePublicAvailability', () => {
+    it('stores the settings next to the schedule without touching it', async () => {
+      const saved = await admin.savePublicAvailability({
+        enabled: true,
+        days: 10,
+        serviceIds: ['servicio-basico'],
+      });
+
+      expect(saved).toEqual({
+        enabled: true,
+        days: 10,
+        serviceIds: ['servicio-basico'],
+      });
+      expect(fake.settingsModel.docs[0].publicAvailability).toEqual(saved);
+      expect(fake.settingsModel.docs[0].weekly).toEqual(SCHEDULE.weekly);
+    });
+
+    it('rejects a service id that does not exist, saving nothing', async () => {
+      await expect(
+        admin.savePublicAvailability({
+          enabled: true,
+          days: 7,
+          serviceIds: ['servicio-basico', 'nope'],
+        }),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Alguno de los servicios publicados no existe.',
+        ),
+      );
+      expect(fake.settingsModel.docs[0].publicAvailability).toBeUndefined();
+    });
+
+    it('accepts null (all services) without looking services up', async () => {
+      await expect(
+        admin.savePublicAvailability({
+          enabled: true,
+          days: 7,
+          serviceIds: null,
+        }),
+      ).resolves.toEqual({ enabled: true, days: 7, serviceIds: null });
     });
   });
 });

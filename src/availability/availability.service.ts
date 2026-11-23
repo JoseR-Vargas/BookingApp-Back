@@ -9,6 +9,7 @@ import {
   dayOfWeekFromIsoDate,
   freeStartTimes,
   occupiedSlots,
+  offeredStarts,
   slotsRequired,
 } from './availability.calculator';
 
@@ -63,6 +64,7 @@ export class AvailabilityService {
 
     const interval = schedule.slotIntervalMinutes;
     const required = slotsRequired(totalDuration, interval);
+    const offered = new Set(offeredStarts(dayOfWeek, schedule));
 
     return {
       date,
@@ -83,7 +85,7 @@ export class AvailabilityService {
           ),
           required,
           interval,
-        ),
+        ).filter((time) => offered.has(time)),
       })),
     };
   }

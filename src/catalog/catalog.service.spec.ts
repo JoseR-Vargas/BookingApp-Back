@@ -148,6 +148,7 @@ describe('CatalogService', () => {
       expect(schedule.slotIntervalMinutes).toBe(30);
       expect(Object.keys(schedule).sort()).toEqual([
         'slotIntervalMinutes',
+        'startIntervalMinutes',
         'weekly',
       ]);
     });
@@ -179,6 +180,65 @@ describe('CatalogService', () => {
 
       expect(schedule.weekly[0]).toEqual({ closed: true });
       expect(schedule.slotIntervalMinutes).toBe(30);
+    });
+  });
+
+  describe('startIntervalMinutes', () => {
+    it('is seeded as 30 and returned by both catalogs', async () => {
+      expect(fake.settingsModel.docs[0].startIntervalMinutes).toBe(30);
+      expect((await service.getCatalog()).schedule.startIntervalMinutes).toBe(
+        30,
+      );
+      expect(
+        (await service.getAdminCatalog()).schedule.startIntervalMinutes,
+      ).toBe(30);
+    });
+
+    it('returns the stored value', async () => {
+      fake.settingsModel.docs[0].startIntervalMinutes = 180;
+
+      expect((await service.getSchedule()).startIntervalMinutes).toBe(180);
+    });
+
+    it('reads a stored document without the field as 30', async () => {
+      delete fake.settingsModel.docs[0].startIntervalMinutes;
+
+      expect((await service.getSchedule()).startIntervalMinutes).toBe(30);
+      expect((await service.getCatalog()).schedule.startIntervalMinutes).toBe(
+        30,
+      );
+    });
+  });
+
+  describe('publicAvailability settings', () => {
+    it('reads as disabled, 7 days, all services when the document has none', async () => {
+      expect(await service.getPublicAvailability()).toEqual({
+        enabled: false,
+        days: 7,
+        serviceIds: null,
+      });
+      expect((await service.getAdminCatalog()).publicAvailability).toEqual({
+        enabled: false,
+        days: 7,
+        serviceIds: null,
+      });
+    });
+
+    it('returns the stored settings, and keeps them out of the public catalog', async () => {
+      fake.settingsModel.docs[0].publicAvailability = {
+        enabled: true,
+        days: 3,
+        serviceIds: ['servicio-basico'],
+      };
+
+      expect((await service.getAdminCatalog()).publicAvailability).toEqual({
+        enabled: true,
+        days: 3,
+        serviceIds: ['servicio-basico'],
+      });
+      expect(await service.getCatalog()).not.toHaveProperty(
+        'publicAvailability',
+      );
     });
   });
 
