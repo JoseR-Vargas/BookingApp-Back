@@ -15,6 +15,7 @@ describe('CatalogAdminService', () => {
       fake.serviceModel,
       fake.settingsModel,
       fake.bookingModel,
+      fake.locationModel,
     );
   });
 
@@ -36,6 +37,7 @@ describe('CatalogAdminService', () => {
         avatar: 'fas fa-user',
         photoUrl: null,
         active: true,
+        locations: ['principal'],
       });
       expect(fake.professionalModel.docs).toHaveLength(3);
       expect(fake.professionalModel.docs[2]).toMatchObject({ id: 'ana-ruiz' });
@@ -118,6 +120,7 @@ describe('CatalogAdminService', () => {
         avatar: 'fas fa-user',
         photoUrl: null,
         active: false,
+        locations: ['principal'],
       });
     });
 
@@ -245,12 +248,14 @@ describe('CatalogAdminService', () => {
         slotIntervalMinutes: 30,
         startIntervalMinutes: 30,
       });
-      expect(fake.settingsModel.docs).toHaveLength(1);
-      expect(fake.settingsModel.docs[0]).toMatchObject({
-        key: 'schedule',
+      // The schedule lives in the default location; the legacy document stays.
+      expect(fake.locationModel.docs).toHaveLength(1);
+      expect(fake.locationModel.docs[0]).toMatchObject({
+        id: 'principal',
         weekly,
         slotIntervalMinutes: 30,
       });
+      expect(fake.settingsModel.docs[0].weekly).toEqual(SCHEDULE.weekly);
       expect((await fake.catalog.getSchedule()).weekly[6]).toEqual({
         closed: true,
       });
@@ -264,7 +269,7 @@ describe('CatalogAdminService', () => {
         slotIntervalMinutes: 30,
         startIntervalMinutes: 180,
       });
-      expect(fake.settingsModel.docs[0].startIntervalMinutes).toBe(180);
+      expect(fake.locationModel.docs[0].startIntervalMinutes).toBe(180);
       expect((await fake.catalog.getSchedule()).startIntervalMinutes).toBe(180);
     });
 
@@ -274,16 +279,20 @@ describe('CatalogAdminService', () => {
       const saved = await admin.saveSchedule(weekly);
 
       expect(saved.startIntervalMinutes).toBe(180);
-      expect(fake.settingsModel.docs[0].startIntervalMinutes).toBe(180);
+      expect(fake.locationModel.docs[0].startIntervalMinutes).toBe(180);
     });
 
-    it('creates the settings document when it does not exist yet', async () => {
+    it('creates the principal location when nothing was stored yet', async () => {
       fake.settingsModel.docs.splice(0, 1);
+      fake.locationModel.docs.splice(0, 1);
 
       await admin.saveSchedule(weekly);
 
-      expect(fake.settingsModel.docs).toHaveLength(1);
-      expect(fake.settingsModel.docs[0].key).toBe('schedule');
+      expect(fake.locationModel.docs).toHaveLength(1);
+      expect(fake.locationModel.docs[0]).toMatchObject({
+        id: 'principal',
+        weekly,
+      });
     });
   });
 

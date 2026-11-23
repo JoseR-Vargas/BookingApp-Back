@@ -13,10 +13,14 @@
   so a day sent without `starts` loses its list. `offeredStarts` in `src/availability/availability.calculator.ts` is the single
   source of this rule: availability, booking creation and booking updates all go through it.
   The hours
-  are stored per weekday as `HH:mm` strings in the `business_settings` collection and edited
-  from the admin panel (`PUT /api/admin/schedule`). `SCHEDULE` in
-  `src/catalog/catalog.config.ts` is only the seed used when the collection is empty:
-  Mon-Fri 09:00-20:00, Sat 09:00-18:00, Sun closed.
+  are stored per weekday as `HH:mm` strings **in each location** (`locations` collection, see
+  [locations.md](./locations.md)) and edited from the admin panel
+  (`PUT /api/admin/locations/:id/schedule`; `PUT /api/admin/schedule` edits the default location).
+  `business_settings` only keeps the legacy copy that seeded the "principal" location.
+  `SCHEDULE` in `src/catalog/catalog.config.ts` is the seed used for a new location and for a
+  database without stored hours: Mon-Fri 09:00-20:00, Sat 09:00-18:00, Sun closed.
+  Everything above (interval, per-day `starts`) applies **per location**: each location offers its
+  own start times.
 - A booking occupies `ceil(totalDuration / 30)` consecutive 30-minute blocks from its start.
   The blocks are stored in `booking.slots`.
 - There is no gap between bookings: a booking that ends exactly at `:00` or `:30` frees that
@@ -37,6 +41,31 @@ changed stay valid even if they fall off the new starts; they are not counted as
 
 `GET /api/availability` returns, per professional, only the free start times. Double booking is
 prevented by the partial unique index on `{ professional.id, date, slots }` (confirmed bookings).
+The index is per **professional**, not per location: a professional who rotates between
+locations cannot be booked at two of them at the same time, and an availability lookup for one
+location hides the hours the professional already has booked at another.
+
+## Locations in availability and bookings
+
+- `GET /api/availability?date&serviceIds[&locationId]`: without `locationId` the default
+  location is used. An unknown or inactive id is a `404` `Location "<id>" not found`. Only the
+  professionals assigned to the location are returned, with that location's schedule. The
+  response adds `location: { id, name }`.
+- `POST /api/bookings` accepts `location: { id }` (the name is taken from the catalog, never from
+  the client). Without it the default location is used while a single location is active; with
+  several: `400` `Error de validación: debes elegir un local`. Other errors:
+  `Error de validación: <profesional> no trabaja en <local>`, `Error de validación: el local
+  seleccionado no existe` (unknown or inactive), and the usual "el horario ... no está
+  disponible" when the time is not offered by THAT location's schedule. The booking stores
+  `location: { id, name }`.
+- `POST /api/bookings/availability` accepts an optional `locationId` (default: the default
+  location). An unknown or inactive location, or a professional who does not work there, answers
+  `{ "available": false }`.
+- `PATCH /api/bookings/:id` validates a change of date, time, services or professional against the
+  location stored in the booking and cannot change it (a `location` in the body is ignored). A
+  booking without `location` is validated against the default location and is not rewritten.
+  Rescheduling a booking whose location was deactivated is refused with `el local seleccionado no
+  existe`; changing only its status still works.
 
 ## Deploy: migrate existing bookings
 

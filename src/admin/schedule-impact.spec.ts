@@ -172,4 +172,51 @@ describe('ScheduleImpactService', () => {
       0,
     );
   });
+
+  describe('scoped to a location', () => {
+    const scope = { locationId: 'centro', defaultLocationId: 'principal' };
+    // 2026-10-18 is a Sunday: closed in `schedule`, so every booking is outside it.
+    const sunday = (location?: { id: string }) => ({
+      date: '2026-10-18',
+      time: '10:00',
+      slots: ['10:00'],
+      ...(location ? { location } : {}),
+    });
+
+    it('counts only the bookings of that location', async () => {
+      found = [
+        sunday({ id: 'centro' }),
+        sunday({ id: 'centro' }),
+        sunday({ id: 'principal' }),
+        sunday(),
+      ];
+
+      await expect(
+        service.countAffected(schedule, '2026-10-01', scope),
+      ).resolves.toBe(2);
+    });
+
+    it('counts bookings without location only for the default location', async () => {
+      found = [sunday({ id: 'centro' }), sunday(), sunday()];
+
+      await expect(
+        service.countAffected(schedule, '2026-10-01', {
+          locationId: 'principal',
+          defaultLocationId: 'principal',
+        }),
+      ).resolves.toBe(2);
+      await expect(
+        service.countAffected(schedule, '2026-10-01', scope),
+      ).resolves.toBe(1);
+    });
+
+    it('still ignores cancelled/past bookings through the same query and loads the location id', async () => {
+      await service.countAffected(schedule, '2026-10-19', scope);
+
+      expect(bookingModel.find).toHaveBeenCalledWith(
+        { date: { $gte: '2026-10-19' }, status: { $ne: 'cancelled' } },
+        { date: 1, time: 1, slots: 1, 'location.id': 1 },
+      );
+    });
+  });
 });

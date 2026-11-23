@@ -180,15 +180,18 @@ export function createFakeCatalog(initial?: {
   services?: Doc[];
   settings?: Doc[];
   bookings?: Doc[];
+  locations?: Doc[];
 }) {
   const professionalModel = createFakeModel(initial?.professionals);
   const serviceModel = createFakeModel(initial?.services);
   const settingsModel = createFakeModel(initial?.settings);
   const bookingModel = createFakeModel(initial?.bookings);
+  const locationModel = createFakeModel(initial?.locations);
   const catalog = new CatalogService(
     professionalModel,
     serviceModel,
     settingsModel,
+    locationModel,
   );
   return {
     catalog,
@@ -196,6 +199,7 @@ export function createFakeCatalog(initial?: {
     serviceModel,
     settingsModel,
     bookingModel,
+    locationModel,
   };
 }
 

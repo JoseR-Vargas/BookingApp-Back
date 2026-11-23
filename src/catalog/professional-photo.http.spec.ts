@@ -74,6 +74,7 @@ describe('Professional photo HTTP contract', () => {
             fake.serviceModel,
             fake.settingsModel,
             fake.bookingModel,
+            fake.locationModel,
           ),
         },
         { provide: ScheduleImpactService, useValue: {} },

@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { LocationNotFoundError } from '../catalog/locations';
 import { ServiceSelectionError } from '../catalog/service-selection';
 import { AvailabilityController } from './availability.controller';
 import { AvailabilityService } from './availability.service';
@@ -85,6 +86,46 @@ describe('AvailabilityController', () => {
     expect(availabilityService.getAvailability).toHaveBeenCalledWith(
       '2026-10-19',
       ['servicio-basico', 'consulta-inicial'],
+      undefined,
+    );
+  });
+
+  it('forwards a trimmed locationId and ignores a blank one', async () => {
+    availabilityService.getAvailability.mockResolvedValue({});
+
+    await controller.getAvailability(
+      '2026-10-19',
+      'servicio-basico',
+      ' centro ',
+    );
+    await controller.getAvailability('2026-10-19', 'servicio-basico', '  ');
+
+    expect(availabilityService.getAvailability).toHaveBeenNthCalledWith(
+      1,
+      '2026-10-19',
+      ['servicio-basico'],
+      'centro',
+    );
+    expect(availabilityService.getAvailability).toHaveBeenNthCalledWith(
+      2,
+      '2026-10-19',
+      ['servicio-basico'],
+      undefined,
+    );
+  });
+
+  it('maps an unknown or inactive location to 404 with the exact message', async () => {
+    availabilityService.getAvailability.mockRejectedValue(
+      new LocationNotFoundError('nope'),
+    );
+
+    const error = await controller
+      .getAvailability('2026-10-19', 'servicio-basico', 'nope')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect((error as NotFoundException).message).toBe(
+      'Location "nope" not found',
     );
   });
 });

@@ -86,6 +86,7 @@ describe('DELETE /api/admin/services/:id/permanent', () => {
             fake.serviceModel,
             fake.settingsModel,
             fake.bookingModel,
+            fake.locationModel,
           ),
         },
         { provide: ScheduleImpactService, useValue: {} },

@@ -8,6 +8,7 @@ import {
   BusinessSettingsRecord,
   BusinessSettingsSchema,
 } from './schemas/business-settings.schema';
+import { LocationRecord, LocationSchema } from './schemas/location.schema';
 import {
   ProfessionalRecord,
   ProfessionalSchema,
@@ -20,6 +21,7 @@ import { ServiceRecord, ServiceSchema } from './schemas/service.schema';
       { name: ProfessionalRecord.name, schema: ProfessionalSchema },
       { name: ServiceRecord.name, schema: ServiceSchema },
       { name: BusinessSettingsRecord.name, schema: BusinessSettingsSchema },
+      { name: LocationRecord.name, schema: LocationSchema },
       // Read-only, for the professional id-reuse and delete guards.
       { name: Booking.name, schema: BookingSchema },
     ]),

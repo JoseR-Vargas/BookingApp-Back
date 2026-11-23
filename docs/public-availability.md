@@ -16,12 +16,18 @@ Stored in `business_settings` (same document as the schedule), field `publicAvai
 `PUT /api/admin/public-availability` (admin key) saves the three fields; `GET /api/admin/catalog`
 returns them as `publicAvailability`. A document stored without the field reads as the defaults.
 
-## `GET /api/public-availability?serviceId=<id>`
+## `GET /api/public-availability?serviceId=<id>[&locationId=<id>]`
 
 Public, no key. Disabled: `{ "enabled": false }`. Enabled: the published services, the chosen
 service (the first one when `serviceId` is omitted) and, per day, each start time with the
 professionals free at it. A service that is not published (or is inactive or unknown) is a 404.
 
+- `locationId` picks the location (default: the default location, see
+  [locations.md](./locations.md)); an unknown or inactive one is a `404`
+  `Location "<id>" not found`. The response adds `locations: [{ id, name }]` (the active ones, for a
+  selector) and `locationId` (the one the days were computed for). The settings above (`enabled`,
+  `days`, `serviceIds`) stay global; the hours and professionals are those of the chosen location.
+  When the page is disabled the answer is still just `{ "enabled": false }`.
 - The hours come from `AvailabilityService.getAvailability`, the same source as the booking modal
   and the WhatsApp bot, so start interval, per-day starts and existing bookings are respected.
 - "Today" is the business date (`BUSINESS_TIMEZONE`, UTC date when unset). With

@@ -100,8 +100,8 @@ describe('PublicAvailabilityService', () => {
     )) as On;
 
     expect(getAvailability.mock.calls).toEqual([
-      ['2026-10-19', ['servicio-basico']],
-      ['2026-10-20', ['servicio-basico']],
+      ['2026-10-19', ['servicio-basico'], 'principal'],
+      ['2026-10-20', ['servicio-basico'], 'principal'],
     ]);
     expect(result.days?.map((d) => d.date)).toEqual([
       '2026-10-19',
@@ -165,9 +165,11 @@ describe('PublicAvailabilityService', () => {
 
     const result = (await service.getPublicAvailability(undefined, NOW)) as On;
 
-    expect(getAvailability).toHaveBeenCalledWith('2026-10-19', [
-      'consulta-inicial',
-    ]);
+    expect(getAvailability).toHaveBeenCalledWith(
+      '2026-10-19',
+      ['consulta-inicial'],
+      'principal',
+    );
     expect(result.days?.[0].times.map((t) => t.time)).toEqual(['09:00']);
   });
 
@@ -218,6 +220,8 @@ describe('PublicAvailabilityService', () => {
       enabled: true,
       services: [],
       serviceId: null,
+      locationId: 'principal',
+      locations: [{ id: 'principal', name: 'Principal' }],
       days: [],
     });
     expect(getAvailability).not.toHaveBeenCalled();

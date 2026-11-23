@@ -288,6 +288,21 @@ describe('BookingsController', () => {
         '10:00',
         'cesar-viloria',
         ['servicio-basico', 'consulta-inicial'],
+        undefined,
+      );
+    });
+
+    it('forwards the optional locationId to the service', async () => {
+      mockBookingsService.checkAvailability.mockResolvedValue({ available: true });
+
+      await controller.checkAvailability({ ...body, locationId: 'centro' });
+
+      expect(mockBookingsService.checkAvailability).toHaveBeenCalledWith(
+        '2026-03-25',
+        '10:00',
+        'cesar-viloria',
+        ['servicio-basico', 'consulta-inicial'],
+        'centro',
       );
     });
 

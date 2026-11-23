@@ -2,11 +2,13 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  AdminLocation,
   Catalog,
   PROFESSIONALS,
   PUBLIC_AVAILABILITY,
   Professional,
   PublicAvailabilitySettings,
+  PublicLocation,
   SCHEDULE,
   SERVICES,
   Service,
@@ -18,14 +20,29 @@ import {
   BusinessSettingsRecord,
   SCHEDULE_KEY,
 } from './schemas/business-settings.schema';
+import { LocationRecord } from './schemas/location.schema';
+import {
+  LocationNotFoundError,
+  PRINCIPAL_LOCATION,
+  activeLocations,
+  ensurePrincipalLocation,
+  loadLocations,
+  professionalLocationIds,
+  toWeeklySchedule,
+} from './locations';
 import { ProfessionalRecord } from './schemas/professional.schema';
 import { ServiceRecord } from './schemas/service.schema';
 import { ServiceSelection, ServiceSelectionError } from './service-selection';
 
 /** Admin view of a professional: the stored fields, `active` included. */
-export type AdminProfessional = Omit<Professional, 'available' | 'photoUrl'> & {
+export type AdminProfessional = Omit<
+  Professional,
+  'available' | 'photoUrl' | 'locations'
+> & {
   active: boolean;
   photoUrl: string | null;
+  /** Stored location ids (inactive ones included); absent = the default. */
+  locations: string[];
 };
 
 /** Admin view of a service: the public fields plus `active`. */
@@ -34,7 +51,10 @@ export type AdminService = Service & { active: boolean };
 export interface AdminCatalog {
   professionals: AdminProfessional[];
   services: AdminService[];
+  /** The default location's schedule (legacy clients). */
   schedule: WeeklySchedule;
+  /** Every location, inactive ones included. */
+  locations: AdminLocation[];
   publicAvailability: PublicAvailabilitySettings;
 }
 
@@ -56,6 +76,7 @@ const CREATION_ORDER = { _id: 1 } as const;
 
 export const toAdminProfessional = (
   record: ProfessionalRecord,
+  defaultLocationId: string,
 ): AdminProfessional => ({
   id: record.id,
   name: record.name,
@@ -65,6 +86,12 @@ export const toAdminProfessional = (
   avatar: record.avatar,
   active: record.active,
   photoUrl: photoUrlOf(record),
+  locations: professionalLocationIds(record, defaultLocationId),
+});
+
+export const toAdminLocation = (record: LocationRecord): AdminLocation => ({
+  ...toPublicLocation(record),
+  active: record.active,
 });
 
 export const toAdminService = (record: ServiceRecord): AdminService => ({
@@ -76,6 +103,13 @@ export const toAdminService = (record: ServiceRecord): AdminService => ({
   professionals: [...record.professionals],
   icon: record.icon,
   active: record.active,
+});
+
+export const toPublicLocation = (record: LocationRecord): PublicLocation => ({
+  id: record.id,
+  name: record.name,
+  address: record.address ?? '',
+  schedule: toWeeklySchedule(record),
 });
 
 const toPublicProfessional = (record: ProfessionalRecord): Professional => ({
@@ -113,6 +147,8 @@ export class CatalogService implements OnModuleInit {
     private readonly serviceModel: Model<ServiceRecord>,
     @InjectModel(BusinessSettingsRecord.name)
     private readonly settingsModel: Model<BusinessSettingsRecord>,
+    @InjectModel(LocationRecord.name)
+    private readonly locationModel: Model<LocationRecord>,
   ) {}
 
   /**
@@ -144,29 +180,41 @@ export class CatalogService implements OnModuleInit {
         startIntervalMinutes: SCHEDULE.startIntervalMinutes,
       },
     );
+    // After the settings: "principal" copies their schedule.
+    await ensurePrincipalLocation(this.locationModel, this.settingsModel);
   }
 
   /** Public catalog: active professionals and services only. */
   async getCatalog(): Promise<Catalog> {
-    const [professionals, services, schedule] = await Promise.all([
+    const [professionals, services, locations] = await Promise.all([
       this.activeProfessionals(),
       this.activeServices(),
-      this.getSchedule(),
+      this.getActiveLocations(),
     ]);
     const activeIds = new Set(professionals.map(({ id }) => id));
+    const activeLocationIds = new Set(locations.map(({ id }) => id));
+    const defaultId = locations[0]?.id ?? PRINCIPAL_LOCATION.id;
     return {
-      professionals: professionals.map(toPublicProfessional),
+      professionals: professionals.map((record) => ({
+        ...toPublicProfessional(record),
+        locations: professionalLocationIds(record, defaultId).filter((id) =>
+          activeLocationIds.has(id),
+        ),
+      })),
       services: services.map((record) => ({
         ...toPublicService(record),
         professionals: record.professionals.filter((id) => activeIds.has(id)),
       })),
-      schedule,
+      schedule: locations[0]
+        ? toWeeklySchedule(locations[0])
+        : await this.getSchedule(),
+      locations: locations.map(toPublicLocation),
     };
   }
 
   /** Admin catalog: everything, inactive items included. */
   async getAdminCatalog(): Promise<AdminCatalog> {
-    const [professionals, services, schedule, publicAvailability] =
+    const [professionals, services, locations, publicAvailability] =
       await Promise.all([
         this.professionalModel
           .find({})
@@ -179,18 +227,24 @@ export class CatalogService implements OnModuleInit {
           .sort(CREATION_ORDER)
           .lean<ServiceRecord[]>()
           .exec(),
-        this.getSchedule(),
+        loadLocations(this.locationModel, this.settingsModel),
         this.getPublicAvailability(),
       ]);
+    const defaultLocation = activeLocations(locations)[0];
     return {
-      professionals: professionals.map(toAdminProfessional),
+      professionals: professionals.map((record) =>
+        toAdminProfessional(
+          record,
+          defaultLocation?.id ?? PRINCIPAL_LOCATION.id,
+        ),
+      ),
       services: services.map(toAdminService),
-      schedule,
+      schedule: toWeeklySchedule(defaultLocation ?? locations[0]),
+      locations: locations.map(toAdminLocation),
       publicAvailability,
     };
   }
 
-  /** The weekly schedule; the seeded defaults if it was never stored. */
   /** Public availability page settings; the default (off) when none is stored. */
   async getPublicAvailability(): Promise<PublicAvailabilitySettings> {
     const stored = await this.settingsModel
@@ -200,20 +254,56 @@ export class CatalogService implements OnModuleInit {
     return stored?.publicAvailability ?? { ...PUBLIC_AVAILABILITY };
   }
 
-  async getSchedule(): Promise<WeeklySchedule> {
-    const stored = await this.settingsModel
-      .findOne({ key: SCHEDULE_KEY })
-      .lean<BusinessSettingsRecord | null>()
+  /**
+   * The weekly schedule of a location; of the default location when
+   * `locationId` is omitted.
+   * @throws LocationNotFoundError for an unknown or inactive location.
+   */
+  async getSchedule(locationId?: string): Promise<WeeklySchedule> {
+    return toWeeklySchedule(await this.getLocation(locationId));
+  }
+
+  /** Active locations, oldest first (the first is the default). */
+  async getActiveLocations(): Promise<LocationRecord[]> {
+    return activeLocations(
+      await loadLocations(this.locationModel, this.settingsModel),
+    );
+  }
+
+  /** Id of the default location: the oldest active one. */
+  async getDefaultLocationId(): Promise<string> {
+    return (await this.getLocation()).id;
+  }
+
+  /**
+   * An active location by id; the default one when `id` is omitted.
+   * @throws LocationNotFoundError for an unknown or inactive location.
+   */
+  async getLocation(id?: string): Promise<LocationRecord> {
+    const active = await this.getActiveLocations();
+    const found =
+      id === undefined ? active[0] : active.find((l) => l.id === id);
+    if (!found) {
+      throw new LocationNotFoundError(id ?? PRINCIPAL_LOCATION.id);
+    }
+    return found;
+  }
+
+  /** Whether an active professional works at the given location. */
+  async worksAtLocation(
+    professionalId: string,
+    locationId: string,
+  ): Promise<boolean> {
+    const record = await this.professionalModel
+      .findOne({ id: professionalId, active: true })
+      .select(WITHOUT_PHOTO_BYTES)
+      .lean<ProfessionalRecord | null>()
       .exec();
-    return stored
-      ? {
-          weekly: stored.weekly,
-          slotIntervalMinutes: stored.slotIntervalMinutes,
-          // Documents stored before the field existed read as 30.
-          startIntervalMinutes:
-            stored.startIntervalMinutes ?? SCHEDULE.startIntervalMinutes,
-        }
-      : SCHEDULE;
+    if (!record) {
+      return false;
+    }
+    const defaultId = await this.getDefaultLocationId();
+    return professionalLocationIds(record, defaultId).includes(locationId);
   }
 
   /** An active service by id. */
@@ -250,9 +340,13 @@ export class CatalogService implements OnModuleInit {
   /**
    * Resolves service ids into a validated selection. Throws a
    * ServiceSelectionError for an empty list, a duplicated id or an unknown
-   * (or inactive) id.
+   * (or inactive) id. With `locationId`, only the professionals assigned to
+   * that location are offered.
    */
-  async resolveServices(serviceIds: string[]): Promise<ServiceSelection> {
+  async resolveServices(
+    serviceIds: string[],
+    locationId?: string,
+  ): Promise<ServiceSelection> {
     if (serviceIds.length === 0) {
       throw new ServiceSelectionError('empty');
     }
@@ -276,11 +370,20 @@ export class CatalogService implements OnModuleInit {
     });
 
     const professionals = await this.activeProfessionals();
+    const defaultId =
+      locationId === undefined ? '' : await this.getDefaultLocationId();
     return {
       services,
       professionals: professionals
         .filter((professional) =>
           services.every((s) => s.professionals.includes(professional.id)),
+        )
+        .filter(
+          (professional) =>
+            locationId === undefined ||
+            professionalLocationIds(professional, defaultId).includes(
+              locationId,
+            ),
         )
         .map(toPublicProfessional),
       totalPrice: services.reduce((sum, s) => sum + s.price, 0),

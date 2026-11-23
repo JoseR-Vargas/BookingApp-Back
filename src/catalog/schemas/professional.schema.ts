@@ -37,6 +37,14 @@ export class ProfessionalRecord {
    */
   @Prop({ type: Object, default: null })
   photo: ProfessionalPhoto | null;
+
+  /**
+   * Ids of the locations the professional works at. Absent (documents stored
+   * before locations existed) = the default location. `default: undefined`
+   * keeps Mongoose from inserting an empty array on upsert.
+   */
+  @Prop({ type: [String], default: undefined })
+  locationIds?: string[];
 }
 
 export const ProfessionalSchema =

@@ -15,7 +15,10 @@ const weekly = {
 };
 
 describe('AdminController', () => {
-  const catalog = { getAdminCatalog: jest.fn() };
+  const catalog = {
+    getAdminCatalog: jest.fn(),
+    getDefaultLocationId: jest.fn(),
+  };
   const admin = {
     createProfessional: jest.fn(),
     updateProfessional: jest.fn(),
@@ -158,6 +161,7 @@ describe('AdminController', () => {
     it('saves, then reports the affected bookings without blocking the save', async () => {
       admin.saveSchedule.mockResolvedValue(saved);
       impact.countAffected.mockResolvedValue(4);
+      catalog.getDefaultLocationId.mockResolvedValue('principal');
 
       const result = await controller.saveSchedule({ weekly });
 
@@ -165,6 +169,7 @@ describe('AdminController', () => {
       expect(impact.countAffected).toHaveBeenCalledWith(
         saved,
         expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        { locationId: 'principal', defaultLocationId: 'principal' },
       );
       expect(result).toEqual({ schedule: saved, affectedBookings: 4 });
     });

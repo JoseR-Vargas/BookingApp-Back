@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CatalogService } from '../catalog/catalog.service';
+import { LocationNotFoundError } from '../catalog/locations';
 import { getBusinessNow } from '../whatsapp/bot/business-time';
 import { AvailabilityService } from './availability.service';
 
@@ -18,6 +19,10 @@ export type PublicAvailability =
       enabled: true;
       services: { id: string; name: string; duration: number }[];
       serviceId: string | null;
+      /** The location the days were computed for. */
+      locationId: string;
+      /** Active locations, so the page can offer a selector. */
+      locations: { id: string; name: string }[];
       days: PublicAvailabilityDay[];
     };
 
@@ -43,15 +48,33 @@ export class PublicAvailabilityService {
     private readonly availabilityService: AvailabilityService,
   ) {}
 
-  /** @throws NotFoundException for a service that is not published. */
+  /**
+   * @param locationId defaults to the default location.
+   * @throws NotFoundException for a service that is not published or a
+   * location that is unknown or inactive.
+   */
   async getPublicAvailability(
     serviceId: string | undefined,
     now: Date = new Date(),
+    locationId?: string,
   ): Promise<PublicAvailability> {
     const settings = await this.catalogService.getPublicAvailability();
     if (!settings.enabled) {
       return { enabled: false };
     }
+
+    const activeLocations = await this.catalogService.getActiveLocations();
+    const location = activeLocations.find((candidate) =>
+      locationId === undefined
+        ? candidate === activeLocations[0]
+        : candidate.id === locationId,
+    );
+    if (!location) {
+      throw new NotFoundException(
+        new LocationNotFoundError(locationId ?? '').message,
+      );
+    }
+    const locations = activeLocations.map(({ id, name }) => ({ id, name }));
 
     const { services: active } = await this.catalogService.getCatalog();
     const published = active
@@ -67,7 +90,14 @@ export class PublicAvailabilityService {
     }
     const chosen = serviceId ?? published[0]?.id ?? null;
     if (chosen === null) {
-      return { enabled: true, services: [], serviceId: null, days: [] };
+      return {
+        enabled: true,
+        services: [],
+        serviceId: null,
+        locationId: location.id,
+        locations,
+        days: [],
+      };
     }
 
     // "Today" and the clock are the business's: the timezone-less fallback is the
@@ -81,7 +111,7 @@ export class PublicAvailabilityService {
     );
     const availabilities = await Promise.all(
       dates.map((date) =>
-        this.availabilityService.getAvailability(date, [chosen]),
+        this.availabilityService.getAvailability(date, [chosen], location.id),
       ),
     );
 
@@ -89,6 +119,8 @@ export class PublicAvailabilityService {
       enabled: true,
       services: published,
       serviceId: chosen,
+      locationId: location.id,
+      locations,
       days: availabilities.map((availability) => {
         const byTime = new Map<string, { id: string; name: string }[]>();
         for (const professional of availability.professionals) {

@@ -19,6 +19,12 @@ export class CreateBookingDto {
     name: string;
   };
 
+  /**
+   * Where the booking happens. Only `id` is trusted; the name comes from the
+   * catalog. Optional while a single location is active.
+   */
+  location?: { id: string };
+
   date: string;
   time: string;
   notes?: string;

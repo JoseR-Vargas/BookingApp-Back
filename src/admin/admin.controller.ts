@@ -12,6 +12,8 @@ import {
 import { AdminKeyGuard } from '../auth/admin-key.guard';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import {
+  parseLocationCreate,
+  parseLocationUpdate,
   parseOptionalPhotoDataUrl,
   parseProfessionalCreate,
   parseProfessionalPhotoBody,
@@ -23,6 +25,7 @@ import {
   parseWeeklySchedule,
 } from '../catalog/catalog-validation';
 import {
+  AdminLocation,
   PublicAvailabilitySettings,
   WeeklySchedule,
 } from '../catalog/catalog.config';
@@ -145,9 +148,52 @@ export class AdminController {
       parseWeeklySchedule(body),
       parseStartInterval(body),
     );
+    const defaultLocationId = await this.catalog.getDefaultLocationId();
     const affectedBookings = await this.scheduleImpact.countAffected(
       schedule,
       currentBusinessDate(),
+      { locationId: defaultLocationId, defaultLocationId },
+    );
+    return { schedule, affectedBookings };
+  }
+
+  @Post('locations')
+  createLocation(@Body() body: unknown): Promise<AdminLocation> {
+    return this.catalogAdmin.createLocation(parseLocationCreate(body));
+  }
+
+  @Put('locations/:id')
+  updateLocation(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<AdminLocation> {
+    return this.catalogAdmin.updateLocation(id, parseLocationUpdate(body));
+  }
+
+  /**
+   * Saves the weekly schedule of one location. Like `PUT schedule`, bookings
+   * it leaves out of hours never block the save; only that location's
+   * bookings are counted.
+   */
+  @Put('locations/:id/schedule')
+  async saveLocationSchedule(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<{ schedule: WeeklySchedule; affectedBookings: number }> {
+    const weekly = parseWeeklySchedule(body);
+    const startIntervalMinutes = parseStartInterval(body);
+    const schedule = await this.catalogAdmin.saveLocationSchedule(
+      id,
+      weekly,
+      startIntervalMinutes,
+    );
+    const affectedBookings = await this.scheduleImpact.countAffected(
+      schedule,
+      currentBusinessDate(),
+      {
+        locationId: id,
+        defaultLocationId: await this.catalog.getDefaultLocationId(),
+      },
     );
     return { schedule, affectedBookings };
   }

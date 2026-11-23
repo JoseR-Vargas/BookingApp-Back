@@ -8,8 +8,16 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Booking } from '../bookings/schemas/booking.schema';
 import { ParsedImage } from '../common/image-data-url';
-import { ProfessionalInput, ServiceInput, slugify } from './catalog-validation';
 import {
+  LOCATION_MESSAGES,
+  LocationInput,
+  PROFESSIONAL_LOCATION_MESSAGES,
+  ProfessionalInput,
+  ServiceInput,
+  slugify,
+} from './catalog-validation';
+import {
+  AdminLocation,
   DayOfWeek,
   DaySchedule,
   PublicAvailabilitySettings,
@@ -19,6 +27,7 @@ import {
 import {
   AdminProfessional,
   AdminService,
+  toAdminLocation,
   toAdminProfessional,
   WITHOUT_PHOTO_BYTES,
   toAdminService,
@@ -28,6 +37,13 @@ import {
   BusinessSettingsRecord,
   SCHEDULE_KEY,
 } from './schemas/business-settings.schema';
+import { LocationRecord } from './schemas/location.schema';
+import {
+  activeLocations,
+  ensurePrincipalLocation,
+  loadLocations,
+  toWeeklySchedule,
+} from './locations';
 import { ProfessionalRecord } from './schemas/professional.schema';
 import { ServiceRecord } from './schemas/service.schema';
 
@@ -52,6 +68,8 @@ export class CatalogAdminService {
     /** Read-only here: bookings are never written by the catalog. */
     @InjectModel(Booking.name)
     private readonly bookingModel: Model<Booking>,
+    @InjectModel(LocationRecord.name)
+    private readonly locationModel: Model<LocationRecord>,
   ) {}
 
   /** The photo, already validated, is stored in the same insert. */
@@ -59,8 +77,14 @@ export class CatalogAdminService {
     input: ProfessionalInput,
     photo: ParsedImage | null = null,
   ): Promise<AdminProfessional> {
+    const { locations, ...rest } = input;
+    const defaultLocationId = await this.defaultLocationId();
+    const locationIds = locations
+      ? await this.assertActiveLocations(locations)
+      : [defaultLocationId];
     const fields = {
-      ...input,
+      ...rest,
+      locationIds,
       rating: DEFAULT_RATING,
       avatar: DEFAULT_AVATAR,
       photo: photo ? { ...photo, updatedAt: new Date() } : null,
@@ -71,14 +95,20 @@ export class CatalogAdminService {
       fields,
       (candidate) => this.isReferencedByBookings(candidate),
     );
-    return toAdminProfessional({ id, ...fields });
+    return toAdminProfessional({ id, ...fields }, defaultLocationId);
   }
 
   async updateProfessional(
     id: string,
     patch: Partial<ProfessionalInput>,
   ): Promise<AdminProfessional> {
-    return this.setProfessionalFields(id, patch);
+    const { locations, ...rest } = patch;
+    return this.setProfessionalFields(id, {
+      ...rest,
+      ...(locations
+        ? { locationIds: await this.assertActiveLocations(locations) }
+        : {}),
+    });
   }
 
   setProfessionalPhoto(
@@ -106,7 +136,7 @@ export class CatalogAdminService {
     if (!updated) {
       throw new NotFoundException(`Professional "${id}" not found`);
     }
-    return toAdminProfessional(updated);
+    return toAdminProfessional(updated, await this.defaultLocationId());
   }
 
   /**
@@ -248,17 +278,36 @@ export class CatalogAdminService {
   }
 
   /**
-   * Replaces the weekly schedule; the occupancy slot interval stays fixed.
-   * An undefined `startIntervalMinutes` keeps the stored value.
+   * Replaces the weekly schedule of the DEFAULT location (the contract of
+   * `PUT /admin/schedule`, which predates locations).
    */
   async saveSchedule(
     weekly: Record<DayOfWeek, DaySchedule>,
     startIntervalMinutes?: number,
   ): Promise<WeeklySchedule> {
+    // A database that was never migrated has no stored location to update.
+    await ensurePrincipalLocation(this.locationModel, this.settingsModel);
+    return this.saveLocationSchedule(
+      await this.defaultLocationId(),
+      weekly,
+      startIntervalMinutes,
+    );
+  }
+
+  /**
+   * Replaces the weekly schedule of one location (active or not); the
+   * occupancy slot interval stays fixed. An undefined `startIntervalMinutes`
+   * keeps the stored value.
+   */
+  async saveLocationSchedule(
+    id: string,
+    weekly: Record<DayOfWeek, DaySchedule>,
+    startIntervalMinutes?: number,
+  ): Promise<WeeklySchedule> {
     const slotIntervalMinutes = SCHEDULE.slotIntervalMinutes;
-    const stored = await this.settingsModel
+    const stored = await this.locationModel
       .findOneAndUpdate(
-        { key: SCHEDULE_KEY },
+        { id },
         {
           $set: {
             weekly,
@@ -268,17 +317,62 @@ export class CatalogAdminService {
               : { startIntervalMinutes }),
           },
         },
-        { upsert: true, new: true },
+        { new: true },
       )
-      .lean<BusinessSettingsRecord | null>()
+      .lean<LocationRecord | null>()
       .exec();
-    return {
-      weekly,
-      slotIntervalMinutes,
-      // A document stored before the field existed reads as 30.
-      startIntervalMinutes:
-        stored?.startIntervalMinutes ?? SCHEDULE.startIntervalMinutes,
+    if (!stored) {
+      throw new NotFoundException(`Location "${id}" not found`);
+    }
+    return toWeeklySchedule(stored);
+  }
+
+  /** New location: the seed schedule (every 30 minutes), active. */
+  async createLocation(input: LocationInput): Promise<AdminLocation> {
+    const fields = {
+      ...input,
+      active: true,
+      weekly: SCHEDULE.weekly,
+      slotIntervalMinutes: SCHEDULE.slotIntervalMinutes,
+      startIntervalMinutes: SCHEDULE.startIntervalMinutes,
+      createdAt: new Date(),
     };
+    const id = await this.insertWithUniqueId(
+      this.locationModel,
+      slugify(input.name, 'location'),
+      fields,
+    );
+    return toAdminLocation({ id, ...fields });
+  }
+
+  /**
+   * Edits name, address and active. The last active location cannot be
+   * deactivated (the check and the write are not one transaction: two admins
+   * deactivating the last two locations at once could both pass).
+   */
+  async updateLocation(
+    id: string,
+    patch: Partial<LocationInput & { active: boolean }>,
+  ): Promise<AdminLocation> {
+    const all = await loadLocations(this.locationModel, this.settingsModel);
+    const current = all.find((location) => location.id === id);
+    if (!current) {
+      throw new NotFoundException(`Location "${id}" not found`);
+    }
+    const othersActive = all.some(
+      (location) => location.active && location.id !== id,
+    );
+    if (patch.active === false && current.active && !othersActive) {
+      throw new BadRequestException(LOCATION_MESSAGES.lastActive);
+    }
+    const updated = await this.locationModel
+      .findOneAndUpdate({ id }, { $set: patch }, { new: true })
+      .lean<LocationRecord | null>()
+      .exec();
+    if (!updated) {
+      throw new NotFoundException(`Location "${id}" not found`);
+    }
+    return toAdminLocation(updated);
   }
 
   /** Stores the public availability page settings next to the schedule. */
@@ -327,6 +421,30 @@ export class CatalogAdminService {
         return id;
       }
     }
+  }
+
+  /** Id of the default location: the oldest active one. */
+  private async defaultLocationId(): Promise<string> {
+    const [defaultLocation] = activeLocations(
+      await loadLocations(this.locationModel, this.settingsModel),
+    );
+    if (!defaultLocation) {
+      throw new BadRequestException(LOCATION_MESSAGES.lastActive);
+    }
+    return defaultLocation.id;
+  }
+
+  /** Every id must belong to an existing, active location. */
+  private async assertActiveLocations(ids: string[]): Promise<string[]> {
+    const active = new Set(
+      activeLocations(
+        await loadLocations(this.locationModel, this.settingsModel),
+      ).map((location) => location.id),
+    );
+    if (!ids.every((id) => active.has(id))) {
+      throw new BadRequestException(PROFESSIONAL_LOCATION_MESSAGES.invalid);
+    }
+    return ids;
   }
 
   /** Every id must belong to an existing professional (active or not). */

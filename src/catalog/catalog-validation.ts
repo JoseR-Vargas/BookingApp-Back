@@ -20,6 +20,8 @@ export interface ProfessionalInput {
   specialty: string;
   experience: string;
   active: boolean;
+  /** Location ids; absent = decided by the caller (create: the default location). */
+  locations?: string[];
 }
 
 export interface ServiceInput {
@@ -131,6 +133,8 @@ function parseFields<T extends object>(
   input: unknown,
   specs: { [K in keyof T]: FieldSpec<T[K]> },
   mode: 'create' | 'update',
+  /** True when the caller handles other fields, so an empty result is fine. */
+  allowEmpty = false,
 ): Partial<T> {
   const body = asBody(input);
   const result: Partial<T> = {};
@@ -145,7 +149,7 @@ function parseFields<T extends object>(
       result[field] = spec.defaultValue;
     }
   }
-  if (Object.keys(result).length === 0) {
+  if (!allowEmpty && Object.keys(result).length === 0) {
     fail(
       `body must include at least one editable field (${Object.keys(specs).join(', ')})`,
     );
@@ -153,13 +157,53 @@ function parseFields<T extends object>(
   return result;
 }
 
-export const parseProfessionalCreate = (body: unknown): ProfessionalInput =>
-  parseFields(body, PROFESSIONAL_FIELDS, 'create') as ProfessionalInput;
+export const PROFESSIONAL_LOCATION_MESSAGES = {
+  invalid: 'El profesional debe trabajar en al menos un local activo.',
+} as const;
+
+/**
+ * Optional `locations` of a professional: `undefined` when absent, otherwise a
+ * non-empty list of distinct ids. Whether the ids exist and are active is
+ * checked against the database by CatalogAdminService.
+ */
+function parseProfessionalLocations(body: unknown): string[] | undefined {
+  const { locations } = asBody(body);
+  if (locations === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(locations) ||
+    locations.length === 0 ||
+    locations.some((id) => typeof id !== 'string' || id.trim() === '') ||
+    new Set(locations.map((id: string) => id.trim())).size !== locations.length
+  ) {
+    return fail(PROFESSIONAL_LOCATION_MESSAGES.invalid);
+  }
+  return (locations as string[]).map((id) => id.trim());
+}
+
+export const parseProfessionalCreate = (body: unknown): ProfessionalInput => {
+  const input = parseFields(
+    body,
+    PROFESSIONAL_FIELDS,
+    'create',
+  ) as ProfessionalInput;
+  const locations = parseProfessionalLocations(body);
+  return locations ? { ...input, locations } : input;
+};
 
 export const parseProfessionalUpdate = (
   body: unknown,
-): Partial<ProfessionalInput> =>
-  parseFields(body, PROFESSIONAL_FIELDS, 'update');
+): Partial<ProfessionalInput> => {
+  const locations = parseProfessionalLocations(body);
+  const patch = parseFields(
+    body,
+    PROFESSIONAL_FIELDS,
+    'update',
+    locations !== undefined,
+  );
+  return locations ? { ...patch, locations } : patch;
+};
 
 export const parseServiceCreate = (body: unknown): ServiceInput =>
   parseFields(body, SERVICE_FIELDS, 'create') as ServiceInput;
@@ -364,4 +408,63 @@ export function parsePublicAvailability(
     return fail(PUBLIC_AVAILABILITY_MESSAGES.serviceIds);
   }
   return { enabled, days, serviceIds: serviceIds as string[] };
+}
+
+export const LOCATION_MESSAGES = {
+  name: 'El nombre del local es obligatorio (máximo 80 caracteres).',
+  address: 'La dirección del local no puede superar los 200 caracteres.',
+  active: 'El estado del local debe ser verdadero o falso.',
+  lastActive: 'Debe quedar al menos un local activo.',
+} as const;
+
+export interface LocationInput {
+  name: string;
+  address: string;
+}
+
+const locationName = (value: unknown): string => {
+  const name = typeof value === 'string' ? value.trim() : '';
+  return name.length >= 1 && name.length <= 80
+    ? name
+    : fail(LOCATION_MESSAGES.name);
+};
+
+const locationAddress = (value: unknown): string => {
+  const address = typeof value === 'string' ? value.trim() : '';
+  return typeof value === 'string' && address.length <= 200
+    ? address
+    : fail(LOCATION_MESSAGES.address);
+};
+
+/** Body of POST /admin/locations: `name` is required, `address` defaults to ''. */
+export function parseLocationCreate(input: unknown): LocationInput {
+  const { name, address } = asBody(input);
+  return {
+    name: locationName(name),
+    address: address === undefined ? '' : locationAddress(address),
+  };
+}
+
+/** Body of PUT /admin/locations/:id: only the provided fields; at least one. */
+export function parseLocationUpdate(
+  input: unknown,
+): Partial<LocationInput & { active: boolean }> {
+  const { name, address, active } = asBody(input);
+  const result: Partial<LocationInput & { active: boolean }> = {};
+  if (name !== undefined) {
+    result.name = locationName(name);
+  }
+  if (address !== undefined) {
+    result.address = locationAddress(address);
+  }
+  if (active !== undefined) {
+    result.active =
+      typeof active === 'boolean' ? active : fail(LOCATION_MESSAGES.active);
+  }
+  if (Object.keys(result).length === 0) {
+    fail(
+      'body must include at least one editable field (name, address, active)',
+    );
+  }
+  return result;
 }

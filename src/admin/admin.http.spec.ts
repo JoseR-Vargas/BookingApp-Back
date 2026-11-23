@@ -49,6 +49,7 @@ describe('Admin HTTP contract', () => {
             fake.serviceModel,
             fake.settingsModel,
             fake.bookingModel,
+            fake.locationModel,
           ),
         },
         {
@@ -144,6 +145,7 @@ describe('Admin HTTP contract', () => {
       avatar: 'fas fa-user',
       photoUrl: null,
       active: true,
+      locations: ['principal'],
     });
 
     const patched = await request(app.getHttpServer())
