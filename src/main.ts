@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { DomainErrorFilter } from './shared/infrastructure/http/domain-error.filter';
 
 export async function createApp(): Promise<NestExpressApplication> {
   // rawBody: the WhatsApp webhook signature is computed over the raw bytes.
@@ -11,11 +12,14 @@ export async function createApp(): Promise<NestExpressApplication> {
   return app;
 }
 
-/** HTTP setup shared by the server and its tests: body parsing, prefix, CORS. */
+/** HTTP setup shared by the server and its tests: body parsing, prefix, CORS, domain errors. */
 export function configureApp(app: NestExpressApplication): void {
   // A 200 KB logo is ~270 KB in base64, above the 100kb default. Nest passes
   // the app's `rawBody` option to this parser, so the webhook keeps req.rawBody.
   app.useBodyParser('json', { limit: '1mb' });
+
+  // Business-rule errors (src/shared) leave the app as the matching HTTP error.
+  app.useGlobalFilters(new DomainErrorFilter());
 
   // Configurar prefijo global /api para todas las rutas excepto la raíz
   app.setGlobalPrefix('api', {

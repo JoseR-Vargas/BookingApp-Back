@@ -1,0 +1,42 @@
+import { join } from 'node:path';
+import { MIGRATED_MODULES } from './architecture/migrated-modules';
+import { RESULT_MODULES } from './architecture/result-modules';
+import { checkModule, formatViolation } from './architecture/scan-imports';
+
+const SRC = __dirname;
+
+/**
+ * Layer rules of docs/architecture.md: domain and application never reach
+ * frameworks, databases or infrastructure. `src/shared` is always checked;
+ * a module is checked once its spec adds it to MIGRATED_MODULES.
+ */
+describe('architecture: layer boundaries', () => {
+  it.each(['shared', ...MIGRATED_MODULES])(
+    'src/%s respects the layer rules',
+    (name) => {
+      const violations = checkModule(join(SRC, name)).map((v) =>
+        formatViolation(v, SRC),
+      );
+      expect(violations).toEqual([]);
+    },
+  );
+});
+
+/**
+ * Modules in RESULT_MODULES return business failures as `Result`: no `throw`
+ * in `domain/` nor in `application/use-cases/`. Infrastructure may still throw.
+ */
+describe('architecture: errors as values', () => {
+  it('only migrated modules can return Result', () => {
+    expect(
+      RESULT_MODULES.filter((name) => !MIGRATED_MODULES.includes(name)),
+    ).toEqual([]);
+  });
+
+  it('no throw in domain or use cases of RESULT_MODULES', () => {
+    const violations = RESULT_MODULES.flatMap((name) =>
+      checkModule(join(SRC, name), { noThrow: true }),
+    ).map((v) => formatViolation(v, SRC));
+    expect(violations).toEqual([]);
+  });
+});

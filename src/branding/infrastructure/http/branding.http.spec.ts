@@ -1,16 +1,17 @@
 import { Server } from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { BRANDING_READER } from '../../application/ports/branding.reader';
+import { BRANDING_WRITER } from '../../application/ports/branding.writer';
 import * as request from 'supertest';
-import { BrandingAdminController } from './branding-admin.controller';
-import { BrandingController } from './branding.controller';
-import { BrandingService } from './branding.service';
+import { DEFAULT_COLORS } from '../../domain/branding';
+import { DomainErrorFilter } from '../../../shared/infrastructure/http/domain-error.filter';
+import { InMemoryBrandingRepository } from '../persistence/in-memory/in-memory-branding.repository';
 import {
-  FakeBrandingModel,
+  BRANDING_CONTROLLERS,
   bodyOf,
-  createFakeBranding,
-} from './branding.testing';
-import { DEFAULT_COLORS } from './schemas/branding.schema';
+  inMemoryBrandingProviders,
+} from './branding-http.testing';
 
 const LOGO_ERROR = 'El logo debe ser PNG, JPG o WebP de hasta 200 KB.';
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -31,12 +32,16 @@ const COLORS = {
   button: null,
 };
 
-/** End-to-end over HTTP with an in-memory model: guard, routing, status codes. */
-describe('Branding HTTP contract', () => {
+/**
+ * End-to-end over HTTP with every port bound to the in-memory adapter: guard,
+ * routing, status codes. That the whole suite passes without a database or a
+ * change to the use cases or the domain IS the database-swap proof.
+ */
+describe('Branding HTTP contract (swap proof: in-memory adapter bound)', () => {
   const KEY = 'branding-test-key';
   const auth = { Authorization: `Bearer ${KEY}` };
   let app: INestApplication;
-  let model: FakeBrandingModel;
+  let model: InMemoryBrandingRepository;
   let saved: string | undefined;
 
   const server = () => request(app.getHttpServer() as Server);
@@ -44,13 +49,13 @@ describe('Branding HTTP contract', () => {
   beforeEach(async () => {
     saved = process.env.ADMIN_API_KEY;
     process.env.ADMIN_API_KEY = KEY;
-    const fake = createFakeBranding();
-    model = fake.model;
+    model = new InMemoryBrandingRepository();
     const moduleRef = await Test.createTestingModule({
-      controllers: [BrandingController, BrandingAdminController],
-      providers: [{ provide: BrandingService, useValue: fake.service }],
+      controllers: BRANDING_CONTROLLERS,
+      providers: inMemoryBrandingProviders(model),
     }).compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalFilters(new DomainErrorFilter());
     app.setGlobalPrefix('api');
     await app.init();
   });
@@ -268,5 +273,85 @@ describe('Branding HTTP contract', () => {
       });
       await server().get('/api/branding/logo').expect(404);
     });
+  });
+});
+
+/** An infrastructure failure (the database is down) is not a business failure. */
+describe('Branding HTTP: infrastructure failures', () => {
+  const KEY = 'branding-test-key';
+  const auth = { Authorization: `Bearer ${KEY}` };
+  const down = () => {
+    throw new Error('connection refused');
+  };
+  const brokenRepository = {
+    find: down,
+    saveBranding: down,
+    saveLogo: down,
+    deleteLogo: down,
+  };
+  let app: INestApplication;
+  let saved: string | undefined;
+
+  const server = () => request(app.getHttpServer() as Server);
+
+  beforeEach(async () => {
+    saved = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = KEY;
+    const moduleRef = await Test.createTestingModule({
+      controllers: BRANDING_CONTROLLERS,
+      providers: [
+        ...inMemoryBrandingProviders(new InMemoryBrandingRepository()),
+        { provide: BRANDING_READER, useValue: brokenRepository },
+        { provide: BRANDING_WRITER, useValue: brokenRepository },
+      ],
+    }).compile();
+    app = moduleRef.createNestApplication();
+    app.useLogger(false);
+    app.useGlobalFilters(new DomainErrorFilter());
+    app.setGlobalPrefix('api');
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    if (saved === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = saved;
+  });
+
+  const internalError = { statusCode: 500, message: 'Internal server error' };
+
+  it('GET /api/branding answers 500 when the repository throws, never 400', async () => {
+    const res = await server().get('/api/branding').expect(500);
+    expect(res.body).toEqual(internalError);
+  });
+
+  it('GET /api/branding/logo answers 500, not 404, when the repository throws', async () => {
+    const res = await server().get('/api/branding/logo').expect(500);
+    expect(res.body).toEqual(internalError);
+  });
+
+  it.each([
+    ['/api/admin/branding', { businessName: 'x', colors: COLORS }],
+    ['/api/admin/branding/logo', { dataUrl: dataUrl('image/png', image(PNG)) }],
+  ])('PUT %s answers 500 when the repository throws', async (path, body) => {
+    const res = await server().put(path).set(auth).send(body).expect(500);
+    expect(res.body).toEqual(internalError);
+  });
+
+  it('DELETE /api/admin/branding/logo answers 500 when the repository throws', async () => {
+    const res = await server()
+      .delete('/api/admin/branding/logo')
+      .set(auth)
+      .expect(500);
+    expect(res.body).toEqual(internalError);
+  });
+
+  it('an invalid body is still a business failure (400) even when the repository is down', async () => {
+    const res = await server()
+      .put('/api/admin/branding')
+      .set(auth)
+      .send({ colors: {} })
+      .expect(400);
+    expect(bodyOf(res).message).toBe('El color "Acento" es obligatorio.');
   });
 });

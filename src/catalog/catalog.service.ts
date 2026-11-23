@@ -14,7 +14,7 @@ import {
   Service,
   WeeklySchedule,
 } from './catalog.config';
-import { toBuffer } from '../branding/branding.service';
+import { toBuffer } from '../shared/infrastructure/mongo/to-buffer';
 import { insertIfAbsent } from './insert-if-absent';
 import {
   BusinessSettingsRecord,

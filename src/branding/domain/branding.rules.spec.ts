@@ -1,16 +1,41 @@
-import { BadRequestException } from '@nestjs/common';
+import { DEFAULT_COLORS } from './branding';
+import { BRANDING_MESSAGES, InvalidBrandingError } from './branding.errors';
 import {
-  BRANDING_MESSAGES,
   MAX_LOGO_BYTES,
+  completeColors,
   contrastRatio,
-  parseBrandingInput,
-  parseLogoDataUrl,
-} from './branding-validation';
-import { DEFAULT_COLORS } from './schemas/branding.schema';
+  validateBranding,
+  validateLogo,
+} from './branding.rules';
+import { InvalidLogoError } from './branding.errors';
+import { Result } from '../../shared/domain/result';
 
-const rejects = (fn: () => unknown, message: string | RegExp) => {
-  expect(fn).toThrow(BadRequestException);
-  expect(fn).toThrow(message);
+/** The value of a result that must have succeeded (fails the test otherwise). */
+const valueOf = <T>(result: Result<T>): T => {
+  if (!result.ok) {
+    throw new Error(`expected Ok, got Err: ${result.error.message}`);
+  }
+  return result.value;
+};
+
+/** A rule must answer an Err of that class with exactly the message, and never throw. */
+const rejects = (
+  fn: () => Result<unknown>,
+  message: string,
+  error: new (...args: never[]) => unknown = InvalidBrandingError,
+) => {
+  const result = fn();
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.error).toBeInstanceOf(error);
+    expect(result.error.message).toBe(message);
+  }
+};
+
+/** Every rejection is a validation DomainError. */
+const kindOf = (fn: () => Result<unknown>) => {
+  const result = fn();
+  return result.ok ? undefined : result.error.kind;
 };
 
 const validColors = () => ({
@@ -31,9 +56,6 @@ const image = (header: number[], size = 64): Buffer => {
   return bytes;
 };
 
-const dataUrl = (mime: string, bytes: Buffer) =>
-  `data:${mime};base64,${bytes.toString('base64')}`;
-
 describe('contrastRatio (WCAG 2.1 relative luminance)', () => {
   it.each([
     ['#ffffff', '#000000', 21],
@@ -50,24 +72,26 @@ describe('contrastRatio (WCAG 2.1 relative luminance)', () => {
   });
 });
 
-describe('parseBrandingInput', () => {
+describe('validateBranding', () => {
   it('accepts the defaults without button', () => {
     expect(
-      parseBrandingInput({ businessName: null, colors: validColors() }),
+      valueOf(validateBranding({ businessName: null, colors: validColors() })),
     ).toEqual({ businessName: null, colors: validColors() });
   });
 
   it('accepts an button and stores every color lowercase', () => {
     expect(
-      parseBrandingInput({
-        businessName: 'Barbería Don Pepe',
-        colors: {
-          accent: '#C9A96E',
-          background: '#0D0D0D',
-          text: '#F5F0E8',
-          button: '#E0C08A',
-        },
-      }),
+      valueOf(
+        validateBranding({
+          businessName: 'Barbería Don Pepe',
+          colors: {
+            accent: '#C9A96E',
+            background: '#0D0D0D',
+            text: '#F5F0E8',
+            button: '#E0C08A',
+          },
+        }),
+      ),
     ).toEqual({
       businessName: 'Barbería Don Pepe',
       colors: {
@@ -82,7 +106,7 @@ describe('parseBrandingInput', () => {
   it('treats an absent button as null', () => {
     const colors: Record<string, unknown> = validColors();
     delete colors.button;
-    expect(parseBrandingInput({ colors }).colors.button).toBeNull();
+    expect(valueOf(validateBranding({ colors })).colors.button).toBeNull();
   });
 
   it.each(['accent', 'background', 'text'] as const)(
@@ -91,7 +115,7 @@ describe('parseBrandingInput', () => {
       const colors: Record<string, unknown> = validColors();
       delete colors[field];
       rejects(
-        () => parseBrandingInput({ colors }),
+        () => validateBranding({ colors }),
         BRANDING_MESSAGES.requiredColor[field],
       );
     },
@@ -99,16 +123,14 @@ describe('parseBrandingInput', () => {
 
   it('rejects missing colors altogether', () => {
     rejects(
-      () => parseBrandingInput({ businessName: 'x' }),
+      () => validateBranding({ businessName: 'x', colors: {} }),
       BRANDING_MESSAGES.requiredColor.accent,
     );
-    rejects(() => parseBrandingInput(null), BRANDING_MESSAGES.invalidBody);
-    rejects(() => parseBrandingInput([]), BRANDING_MESSAGES.invalidBody);
   });
 
   it('accepts the default colors', () => {
     expect(
-      parseBrandingInput({ colors: { ...DEFAULT_COLORS } }).colors,
+      valueOf(validateBranding({ colors: { ...DEFAULT_COLORS } })).colors,
     ).toEqual(DEFAULT_COLORS);
   });
 
@@ -118,7 +140,7 @@ describe('parseBrandingInput', () => {
       for (const field of ['accent', 'background', 'text', 'button'] as const) {
         rejects(
           () =>
-            parseBrandingInput({ colors: { ...validColors(), [field]: bad } }),
+            validateBranding({ colors: { ...validColors(), [field]: bad } }),
           BRANDING_MESSAGES.invalidColor[field],
         );
       }
@@ -128,14 +150,14 @@ describe('parseBrandingInput', () => {
   it('rejects text that does not reach 4.5:1 against the background', () => {
     rejects(
       () =>
-        parseBrandingInput({
+        validateBranding({
           colors: { ...validColors(), text: '#777777', background: '#888888' },
         }),
       'El texto no contrasta lo suficiente con el fondo (mínimo 4.5:1).',
     );
     rejects(
       () =>
-        parseBrandingInput({
+        validateBranding({
           colors: {
             accent: '#000000',
             text: '#777777',
@@ -146,35 +168,39 @@ describe('parseBrandingInput', () => {
       BRANDING_MESSAGES.textContrast,
     );
     expect(
-      parseBrandingInput({
-        colors: {
-          accent: '#000000',
-          text: '#767676',
-          background: '#ffffff',
-          button: null,
-        },
-      }).colors.text,
+      valueOf(
+        validateBranding({
+          colors: {
+            accent: '#000000',
+            text: '#767676',
+            background: '#ffffff',
+            button: null,
+          },
+        }),
+      ).colors.text,
     ).toBe('#767676');
   });
 
   it('rejects an accent that does not reach 3:1 against the background', () => {
     rejects(
       () =>
-        parseBrandingInput({ colors: { ...validColors(), accent: '#222222' } }),
+        validateBranding({ colors: { ...validColors(), accent: '#222222' } }),
       'El acento no contrasta lo suficiente con el fondo (mínimo 3:1).',
     );
     const light = { text: '#000000', background: '#ffffff' };
     rejects(
       () =>
-        parseBrandingInput({
+        validateBranding({
           colors: { ...light, accent: '#959595', button: null },
         }),
       BRANDING_MESSAGES.accentContrast,
     );
     expect(
-      parseBrandingInput({
-        colors: { ...light, accent: '#949494', button: null },
-      }).colors.accent,
+      valueOf(
+        validateBranding({
+          colors: { ...light, accent: '#949494', button: null },
+        }),
+      ).colors.accent,
     ).toBe('#949494');
   });
 
@@ -184,13 +210,13 @@ describe('parseBrandingInput', () => {
       background: '#111111',
       button: '#295294',
     };
-    expect(parseBrandingInput({ colors }).colors.button).toBe('#295294');
+    expect(valueOf(validateBranding({ colors })).colors.button).toBe('#295294');
   });
 
   it('rejects a button that does not reach 2:1 against the background', () => {
     rejects(
       () =>
-        parseBrandingInput({
+        validateBranding({
           colors: { ...validColors(), button: '#222222' },
         }),
       'El color de los botones no contrasta lo suficiente con el fondo (mínimo 2:1).',
@@ -199,7 +225,8 @@ describe('parseBrandingInput', () => {
 
   it('trims the business name; empty or blank becomes null', () => {
     const parse = (businessName: unknown) =>
-      parseBrandingInput({ businessName, colors: validColors() }).businessName;
+      valueOf(validateBranding({ businessName, colors: validColors() }))
+        .businessName;
     expect(parse('  Don Pepe  ')).toBe('Don Pepe');
     expect(parse('')).toBeNull();
     expect(parse('    ')).toBeNull();
@@ -209,25 +236,43 @@ describe('parseBrandingInput', () => {
 
   it('accepts 60 characters and rejects 61', () => {
     const parse = (businessName: unknown) =>
-      parseBrandingInput({ businessName, colors: validColors() }).businessName;
+      valueOf(validateBranding({ businessName, colors: validColors() }))
+        .businessName;
     expect(parse('a'.repeat(60))).toBe('a'.repeat(60));
     expect(parse(`  ${'a'.repeat(60)}  `)).toBe('a'.repeat(60));
     rejects(
-      () => parse('a'.repeat(61)),
+      () =>
+        validateBranding({
+          businessName: 'a'.repeat(61),
+          colors: validColors(),
+        }),
       'El nombre del negocio puede tener hasta 60 caracteres.',
     );
   });
 
   it('rejects a business name that is not text', () => {
     rejects(
-      () => parseBrandingInput({ businessName: 42, colors: validColors() }),
+      () => validateBranding({ businessName: 42, colors: validColors() }),
       BRANDING_MESSAGES.invalidBusinessName,
     );
   });
+
+  it('checks the name before the colors', () => {
+    rejects(
+      () => validateBranding({ businessName: 'a'.repeat(61), colors: {} }),
+      BRANDING_MESSAGES.businessNameTooLong,
+    );
+  });
+
+  it('raises validation domain errors, never HTTP exceptions', () => {
+    expect(kindOf(() => validateBranding({ colors: {} }))).toBe('validation');
+  });
 });
 
-describe('parseLogoDataUrl', () => {
+describe('validateLogo', () => {
   const LOGO = 'El logo debe ser PNG, JPG o WebP de hasta 200 KB.';
+  const reject = (mime: string, bytes: Buffer) =>
+    rejects(() => validateLogo(mime, bytes), LOGO, InvalidLogoError);
 
   it.each([
     ['image/png', PNG],
@@ -235,7 +280,7 @@ describe('parseLogoDataUrl', () => {
     ['image/webp', WEBP],
   ])('accepts a %s whose bytes match', (mime, header) => {
     const bytes = image(header);
-    const logo = parseLogoDataUrl({ dataUrl: dataUrl(mime, bytes) });
+    const logo = valueOf(validateLogo(mime, bytes));
     expect(logo.mimeType).toBe(mime);
     expect(Buffer.compare(logo.data, bytes)).toBe(0);
   });
@@ -243,78 +288,89 @@ describe('parseLogoDataUrl', () => {
   it('accepts exactly 200 KB and rejects one byte more', () => {
     expect(MAX_LOGO_BYTES).toBe(200 * 1024);
     expect(
-      parseLogoDataUrl({
-        dataUrl: dataUrl('image/png', image(PNG, MAX_LOGO_BYTES)),
-      }).data.length,
+      valueOf(validateLogo('image/png', image(PNG, MAX_LOGO_BYTES))).data
+        .length,
     ).toBe(MAX_LOGO_BYTES);
-    rejects(
-      () =>
-        parseLogoDataUrl({
-          dataUrl: dataUrl('image/png', image(PNG, MAX_LOGO_BYTES + 1)),
-        }),
-      LOGO,
-    );
+    reject('image/png', image(PNG, MAX_LOGO_BYTES + 1));
   });
 
-  it('rejects an SVG', () => {
+  it('rejects an SVG, by type and disguised as a PNG', () => {
     const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
-    rejects(
-      () => parseLogoDataUrl({ dataUrl: dataUrl('image/svg+xml', svg) }),
-      LOGO,
-    );
-    rejects(
-      () => parseLogoDataUrl({ dataUrl: dataUrl('image/png', svg) }),
-      LOGO,
-    );
+    reject('image/svg+xml', svg);
+    reject('image/png', svg);
   });
 
   it('rejects a ".png" that is not a PNG', () => {
-    rejects(
-      () =>
-        parseLogoDataUrl({
-          dataUrl: dataUrl('image/png', Buffer.from('hello')),
-        }),
-      LOGO,
-    );
+    reject('image/png', Buffer.from('hello'));
   });
 
   it('rejects bytes that disagree with the declared type', () => {
-    rejects(
-      () => parseLogoDataUrl({ dataUrl: dataUrl('image/png', image(JPEG)) }),
-      LOGO,
-    );
-    rejects(
-      () => parseLogoDataUrl({ dataUrl: dataUrl('image/webp', image(PNG)) }),
-      LOGO,
-    );
+    reject('image/png', image(JPEG));
+    reject('image/webp', image(PNG));
   });
 
   it('rejects a RIFF file that is not WebP', () => {
-    const wav = image([
-      ...Buffer.from('RIFF'),
-      0,
-      0,
-      0,
-      0,
-      ...Buffer.from('WAVE'),
-    ]);
-    rejects(
-      () => parseLogoDataUrl({ dataUrl: dataUrl('image/webp', wav) }),
-      LOGO,
+    reject(
+      'image/webp',
+      image([...Buffer.from('RIFF'), 0, 0, 0, 0, ...Buffer.from('WAVE')]),
     );
   });
 
-  it.each([
-    undefined,
-    null,
-    {},
-    { dataUrl: 42 },
-    { dataUrl: '' },
-    { dataUrl: 'not a data url' },
-    { dataUrl: 'data:image/png,plain-text' },
-    { dataUrl: 'data:image/png;base64,' },
-    { dataUrl: 'data:image/png;base64,@@@@' },
-  ])('rejects the malformed payload %p', (body) => {
-    rejects(() => parseLogoDataUrl(body), LOGO);
+  it('rejects an empty file', () => {
+    reject('image/png', Buffer.alloc(0));
+  });
+
+  it('raises a validation domain error', () => {
+    expect(kindOf(() => validateLogo('image/gif', Buffer.alloc(3)))).toBe(
+      'validation',
+    );
+  });
+});
+
+describe('completeColors', () => {
+  it('answers the defaults when there is nothing stored', () => {
+    expect(completeColors(undefined)).toEqual(DEFAULT_COLORS);
+    expect(completeColors(undefined)).not.toBe(DEFAULT_COLORS);
+  });
+
+  it('keeps the stored colors', () => {
+    expect(
+      completeColors({
+        accent: '#111111',
+        background: '#222222',
+        text: '#333333',
+        button: '#444444',
+      }),
+    ).toEqual({
+      accent: '#111111',
+      background: '#222222',
+      text: '#333333',
+      button: '#444444',
+    });
+  });
+
+  it('a color saved before the button existed: buttons follow the accent (button null)', () => {
+    expect(
+      completeColors({
+        accent: '#c9a96e',
+        background: '#0d0d0d',
+        text: '#f5f0e8',
+      }),
+    ).toEqual({
+      accent: '#c9a96e',
+      background: '#0d0d0d',
+      text: '#f5f0e8',
+      button: null,
+    });
+  });
+
+  it('ignores keys that are not colors', () => {
+    const legacy = {
+      accent: '#c9a96e',
+      background: '#0d0d0d',
+      text: '#f5f0e8',
+      accentSecondary: '#dfc08a',
+    };
+    expect(completeColors(legacy)).not.toHaveProperty('accentSecondary');
   });
 });
