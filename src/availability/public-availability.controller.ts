@@ -12,11 +12,16 @@ export class PublicAvailabilityController {
   @Get()
   getPublicAvailability(
     @Query('serviceId') serviceId?: string,
+    @Query('locationId') locationId?: string,
   ): Promise<PublicAvailability> {
+    const clean = (value?: string) =>
+      typeof value === 'string' && value.trim() !== ''
+        ? value.trim()
+        : undefined;
     return this.service.getPublicAvailability(
-      typeof serviceId === 'string' && serviceId.trim() !== ''
-        ? serviceId.trim()
-        : undefined,
+      clean(serviceId),
+      undefined,
+      clean(locationId),
     );
   }
 }

@@ -1,10 +1,15 @@
 import { Server } from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import * as request from 'supertest';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import { CatalogService } from '../catalog/catalog.service';
-import { FakeModel, createFakeCatalog } from '../catalog/catalog.testing';
+import { DomainErrorFilter } from '../shared/infrastructure/http/domain-error.filter';
+import * as request from 'supertest';
+import {
+  FakeModel,
+  createFakeCatalog,
+  CATALOG_ROUTE_CONTROLLERS,
+} from '../catalog/catalog.testing';
 import { AdminController } from './admin.controller';
 import { ScheduleImpactService, currentBusinessDate } from './schedule-impact';
 
@@ -76,22 +81,16 @@ describe('DELETE /api/admin/services/:id/permanent', () => {
     services = fake.serviceModel;
     bookings = fake.bookingModel;
     const moduleRef = await Test.createTestingModule({
-      controllers: [AdminController],
+      controllers: [AdminController, ...CATALOG_ROUTE_CONTROLLERS],
       providers: [
+        ...fake.useCaseProviders,
         { provide: CatalogService, useValue: {} },
-        {
-          provide: CatalogAdminService,
-          useValue: new CatalogAdminService(
-            fake.professionalModel,
-            fake.serviceModel,
-            fake.settingsModel,
-            fake.bookingModel,
-          ),
-        },
+        { provide: CatalogAdminService, useValue: fake.admin },
         { provide: ScheduleImpactService, useValue: {} },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalFilters(new DomainErrorFilter());
     app.setGlobalPrefix('api');
     await app.init();
   }

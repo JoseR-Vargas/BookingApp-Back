@@ -5,9 +5,13 @@ import {
   NotFoundException,
   Query,
 } from '@nestjs/common';
+import { LocationNotFoundError } from '../catalog/locations';
 import { ServiceSelectionError } from '../catalog/service-selection';
 import { dayOfWeekFromIsoDate } from './availability.calculator';
-import { Availability, AvailabilityService } from './availability.service';
+import {
+  AvailabilityService,
+  LocatedAvailability,
+} from './availability.service';
 
 /** Splits `a,b,c` into trimmed ids; anything else is a client error. */
 function parseServiceIds(value: unknown): string[] {
@@ -31,20 +35,30 @@ export class AvailabilityController {
   async getAvailability(
     @Query('date') date: string,
     @Query('serviceIds') serviceIds: string,
-  ): Promise<Availability> {
+    @Query('locationId') locationId?: string,
+  ): Promise<LocatedAvailability> {
     if (typeof date !== 'string' || dayOfWeekFromIsoDate(date) === null) {
       throw new BadRequestException('date must be a valid YYYY-MM-DD date');
     }
     const ids = parseServiceIds(serviceIds);
     try {
-      return await this.availabilityService.getAvailability(date, ids);
+      return await this.availabilityService.getAvailability(
+        date,
+        ids,
+        typeof locationId === 'string' && locationId.trim() !== ''
+          ? locationId.trim()
+          : undefined,
+      );
     } catch (error) {
       throw this.toHttpException(error);
     }
   }
 
-  /** Unknown service -> 404, other invalid selections -> 400. */
+  /** Unknown service or location -> 404, other invalid selections -> 400. */
   private toHttpException(error: unknown): unknown {
+    if (error instanceof LocationNotFoundError) {
+      return new NotFoundException(error.message);
+    }
     if (!(error instanceof ServiceSelectionError)) {
       return error;
     }

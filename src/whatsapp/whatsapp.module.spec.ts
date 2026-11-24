@@ -5,6 +5,7 @@ import { Booking } from '../bookings/schemas/booking.schema';
 import { BookingsModule } from '../bookings/bookings.module';
 import { BookingsService } from '../bookings/bookings.service';
 import { BusinessSettingsRecord } from '../catalog/schemas/business-settings.schema';
+import { LocationRecord } from '../catalog/schemas/location.schema';
 import { ProfessionalRecord } from '../catalog/schemas/professional.schema';
 import { ServiceRecord } from '../catalog/schemas/service.schema';
 import { BotHandler } from './bot/bot.handler';
@@ -53,6 +54,8 @@ describe('WhatsappModule wiring (no WHATSAPP_* / BUSINESS_TIMEZONE env)', () => 
       .overrideProvider(getModelToken(ServiceRecord.name))
       .useValue({})
       .overrideProvider(getModelToken(BusinessSettingsRecord.name))
+      .useValue({})
+      .overrideProvider(getModelToken(LocationRecord.name))
       .useValue({})
       .compile();
   }, 30000);

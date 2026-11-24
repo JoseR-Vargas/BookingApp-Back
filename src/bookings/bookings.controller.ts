@@ -69,6 +69,7 @@ export class BookingsController {
       time: string;
       professionalId: string;
       serviceIds: string[];
+      locationId?: string;
     },
   ) {
     try {
@@ -77,6 +78,7 @@ export class BookingsController {
         body.time,
         body.professionalId,
         body.serviceIds,
+        body.locationId,
       );
     } catch (error) {
       throw this.toHttpException(error, 'Error al consultar disponibilidad:');

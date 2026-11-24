@@ -1,45 +1,6 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-
-export interface ProfessionalPhoto {
-  mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
-  data: Buffer;
-  updatedAt: Date;
-}
-
-/** A professional stored in the `professionals` collection. */
-@Schema({ collection: 'professionals', versionKey: false })
-export class ProfessionalRecord {
-  /** Slug generated from the name; unique and immutable. */
-  @Prop({ type: String, required: true })
-  id: string;
-
-  @Prop({ type: String, required: true })
-  name: string;
-
-  @Prop({ type: String, default: '' })
-  specialty: string;
-
-  @Prop({ type: String, default: '' })
-  experience: string;
-
-  @Prop({ type: Number, default: 5 })
-  rating: number;
-
-  @Prop({ type: String, default: 'fas fa-user' })
-  avatar: string;
-
-  @Prop({ type: Boolean, default: true })
-  active: boolean;
-
-  /**
-   * Profile picture. Queries exclude `photo.data` (`-photo.data`); only the
-   * photo endpoint reads the bytes. Missing field = no photo.
-   */
-  @Prop({ type: Object, default: null })
-  photo: ProfessionalPhoto | null;
-}
-
-export const ProfessionalSchema =
-  SchemaFactory.createForClass(ProfessionalRecord);
-
-ProfessionalSchema.index({ id: 1 }, { unique: true });
+/**
+ * The professional entity lives with its MongoDB adapter. This path stays for
+ * the modules that have not migrated yet (they still read the schema).
+ * @deprecated Import from `infrastructure/persistence/mongo/professional.entity`.
+ */
+export * from '../infrastructure/persistence/mongo/professional.entity';

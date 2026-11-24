@@ -64,6 +64,24 @@ export class Booking extends Document {
     name: string;
   };
 
+  /**
+   * Where the booking happens, as named when it was made. Computed
+   * server-side; absent on bookings created before locations existed, which
+   * read as the default location.
+   */
+  @Prop({
+    type: {
+      _id: false,
+      id: { type: String, required: true },
+      name: { type: String, required: true },
+    },
+    required: false,
+  })
+  location?: {
+    id: string;
+    name: string;
+  };
+
   @Prop({ required: true })
   date: string;
 

@@ -99,6 +99,7 @@ describe('AvailabilityService', () => {
     expect(result).toEqual({
       date: '2026-10-19',
       closed: false,
+      location: { id: 'principal', name: 'Principal' },
       services: [
         { id: 'servicio-premium', name: 'Servicio Premium', duration: 90 },
       ],
@@ -228,7 +229,7 @@ describe('AvailabilityService', () => {
       ).professionals.find((p) => p.id === 'alex-garcia')!.slots;
 
     it('offers the Monday list only on Monday; Tuesday keeps its own rule', async () => {
-      const weekly = fake.settingsModel.docs[0].weekly;
+      const weekly = fake.locationModel.docs[0].weekly;
       weekly[1] = {
         closed: false,
         open: '09:00',
@@ -249,7 +250,7 @@ describe('AvailabilityService', () => {
     });
 
     it('still excludes a listed start that is occupied', async () => {
-      fake.settingsModel.docs[0].weekly[1] = {
+      fake.locationModel.docs[0].weekly[1] = {
         closed: false,
         open: '09:00',
         close: '20:00',
@@ -268,7 +269,7 @@ describe('AvailabilityService', () => {
     };
 
     beforeEach(() => {
-      fake.settingsModel.docs[0].startIntervalMinutes = 180;
+      fake.locationModel.docs[0].startIntervalMinutes = 180;
       fake.serviceModel.docs.find(
         (d) => d.id === 'servicio-premium',
       )!.duration = 180;
@@ -310,7 +311,7 @@ describe('AvailabilityService', () => {
     });
 
     it('reads a stored document without the field as 30', async () => {
-      delete fake.settingsModel.docs[0].startIntervalMinutes;
+      delete fake.locationModel.docs[0].startIntervalMinutes;
 
       expect(await alexSlots('consulta-inicial')).toEqual(
         times('09:00', '19:30'),

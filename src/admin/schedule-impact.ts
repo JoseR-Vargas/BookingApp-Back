@@ -14,6 +14,15 @@ export interface ScheduledBooking {
   date: string;
   time: string;
   slots?: string[];
+  /** Absent on bookings created before locations existed. */
+  location?: { id: string };
+}
+
+/** Restricts the count to the bookings of one location. */
+export interface LocationScope {
+  locationId: string;
+  /** Bookings without a stored location belong to this one. */
+  defaultLocationId: string;
 }
 
 /** Today's 'YYYY-MM-DD': business timezone if valid, otherwise the UTC date. */
@@ -66,19 +75,31 @@ export class ScheduleImpactService {
     @InjectModel(Booking.name) private bookingModel: Model<Booking>,
   ) {}
 
-  /** Non-cancelled bookings from `today` on that `schedule` no longer fits. */
+  /**
+   * Non-cancelled bookings from `today` on that `schedule` no longer fits.
+   * With a `scope`, only the bookings of that location count (a booking
+   * without location counts for the default one).
+   */
   async countAffected(
     schedule: WeeklySchedule,
     today: string,
+    scope?: LocationScope,
   ): Promise<number> {
     const upcoming = await this.bookingModel
       .find(
         { date: { $gte: today }, status: { $ne: 'cancelled' } },
-        { date: 1, time: 1, slots: 1 },
+        scope
+          ? { date: 1, time: 1, slots: 1, 'location.id': 1 }
+          : { date: 1, time: 1, slots: 1 },
       )
       .lean<ScheduledBooking[]>()
       .exec();
-    return upcoming.filter((booking) => isOutsideSchedule(booking, schedule))
-      .length;
+    return upcoming.filter(
+      (booking) =>
+        (!scope ||
+          (booking.location?.id ?? scope.defaultLocationId) ===
+            scope.locationId) &&
+        isOutsideSchedule(booking, schedule),
+    ).length;
   }
 }

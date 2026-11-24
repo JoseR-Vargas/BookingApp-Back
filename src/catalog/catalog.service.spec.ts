@@ -105,6 +105,7 @@ describe('CatalogService', () => {
         avatar: 'fas fa-user-tie',
         photoUrl: null,
         available: true,
+        locations: ['principal'],
       });
     });
 
@@ -195,13 +196,13 @@ describe('CatalogService', () => {
     });
 
     it('returns the stored value', async () => {
-      fake.settingsModel.docs[0].startIntervalMinutes = 180;
+      fake.locationModel.docs[0].startIntervalMinutes = 180;
 
       expect((await service.getSchedule()).startIntervalMinutes).toBe(180);
     });
 
     it('reads a stored document without the field as 30', async () => {
-      delete fake.settingsModel.docs[0].startIntervalMinutes;
+      delete fake.locationModel.docs[0].startIntervalMinutes;
 
       expect((await service.getSchedule()).startIntervalMinutes).toBe(30);
       expect((await service.getCatalog()).schedule.startIntervalMinutes).toBe(

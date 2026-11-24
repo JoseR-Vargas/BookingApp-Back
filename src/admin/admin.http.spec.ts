@@ -1,11 +1,14 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { DomainErrorFilter } from '../shared/infrastructure/http/domain-error.filter';
 import * as request from 'supertest';
 import { AdminSessionController } from '../auth/admin-session.controller';
-import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import { CatalogController } from '../catalog/catalog.controller';
-import { CatalogService } from '../catalog/catalog.service';
-import { createFakeCatalog, createFakeModel } from '../catalog/catalog.testing';
+import {
+  createFakeCatalog,
+  createFakeModel,
+  CATALOG_ROUTE_CONTROLLERS,
+} from '../catalog/catalog.testing';
 import { AdminController } from './admin.controller';
 import { ScheduleImpactService } from './schedule-impact';
 
@@ -39,18 +42,14 @@ describe('Admin HTTP contract', () => {
       },
     ]);
     const moduleRef = await Test.createTestingModule({
-      controllers: [AdminController, AdminSessionController, CatalogController],
+      controllers: [
+        AdminController,
+        AdminSessionController,
+        CatalogController,
+        ...CATALOG_ROUTE_CONTROLLERS,
+      ],
       providers: [
-        { provide: CatalogService, useValue: fake.catalog },
-        {
-          provide: CatalogAdminService,
-          useValue: new CatalogAdminService(
-            fake.professionalModel,
-            fake.serviceModel,
-            fake.settingsModel,
-            fake.bookingModel,
-          ),
-        },
+        ...fake.providers,
         {
           provide: ScheduleImpactService,
           useValue: new ScheduleImpactService(bookings as never),
@@ -58,6 +57,7 @@ describe('Admin HTTP contract', () => {
       ],
     }).compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalFilters(new DomainErrorFilter());
     app.setGlobalPrefix('api');
     await app.init();
   });
@@ -144,6 +144,7 @@ describe('Admin HTTP contract', () => {
       avatar: 'fas fa-user',
       photoUrl: null,
       active: true,
+      locations: ['principal'],
     });
 
     const patched = await request(app.getHttpServer())

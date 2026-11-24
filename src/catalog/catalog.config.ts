@@ -8,6 +8,11 @@ export interface Professional {
   available: boolean;
   /** Public photo URL, added by the catalog service; `null` without photo. */
   photoUrl?: string | null;
+  /**
+   * Ids of the active locations the professional works at. Only the catalog
+   * read (`GET /catalog`) fills it in.
+   */
+  locations?: string[];
 }
 
 export interface Service {
@@ -44,10 +49,24 @@ export interface WeeklySchedule {
   startIntervalMinutes: number;
 }
 
+/** A location as the public catalog shows it. */
+export interface PublicLocation {
+  id: string;
+  name: string;
+  address: string;
+  schedule: WeeklySchedule;
+}
+
+/** A location as the admin panel sees it: the public fields plus `active`. */
+export type AdminLocation = PublicLocation & { active: boolean };
+
 export interface Catalog {
   professionals: Professional[];
   services: Service[];
+  /** The default location's schedule, kept for clients that predate locations. */
   schedule: WeeklySchedule;
+  /** Active locations only. */
+  locations: PublicLocation[];
 }
 
 export const PROFESSIONALS: Professional[] = [

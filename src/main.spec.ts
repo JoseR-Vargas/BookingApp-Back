@@ -2,14 +2,12 @@ import { Body, Controller, Post, Req } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { BrandingAdminController } from './branding/branding-admin.controller';
-import { BrandingController } from './branding/branding.controller';
-import { BrandingService } from './branding/branding.service';
 import {
-  FakeBrandingModel,
+  BRANDING_CONTROLLERS,
   bodyOf,
-  createFakeBranding,
-} from './branding/branding.testing';
+  inMemoryBrandingProviders,
+} from './branding/infrastructure/http/branding-http.testing';
+import { InMemoryBrandingRepository } from './branding/infrastructure/persistence/in-memory/in-memory-branding.repository';
 import { configureApp } from './main';
 
 /** Reports what the body parser left on the request. */
@@ -39,21 +37,16 @@ describe('configureApp', () => {
   const KEY = 'main-test-key';
   const auth = { Authorization: `Bearer ${KEY}` };
   let app: NestExpressApplication;
-  let model: FakeBrandingModel;
+  let model: InMemoryBrandingRepository;
   let saved: string | undefined;
 
   beforeAll(async () => {
     saved = process.env.ADMIN_API_KEY;
     process.env.ADMIN_API_KEY = KEY;
-    const fake = createFakeBranding();
-    model = fake.model;
+    model = new InMemoryBrandingRepository();
     const moduleRef = await Test.createTestingModule({
-      controllers: [
-        BrandingController,
-        BrandingAdminController,
-        EchoController,
-      ],
-      providers: [{ provide: BrandingService, useValue: fake.service }],
+      controllers: [...BRANDING_CONTROLLERS, EchoController],
+      providers: inMemoryBrandingProviders(model),
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>({
       rawBody: true,

@@ -12,6 +12,7 @@ import { BookingsGateway } from './bookings.gateway';
 import { EmailService } from '../email/email.service';
 import { Service } from '../catalog/catalog.config';
 import { CatalogService } from '../catalog/catalog.service';
+import { LocationNotFoundError } from '../catalog/locations';
 import {
   ServiceSelection,
   ServiceSelectionError,
@@ -38,6 +39,8 @@ interface ScheduleRequest {
   professionalId: string;
   date: string;
   time: string;
+  /** The location the booking happens at, already resolved. */
+  location: { id: string; name: string };
 }
 
 /** Booking fields derived from the catalog; never trusted from the client. */
@@ -46,6 +49,7 @@ interface ResolvedSchedule {
   totalPrice: number;
   totalDuration: number;
   professional: { id: string; name: string };
+  location: { id: string; name: string };
   slots: string[];
 }
 
@@ -53,6 +57,7 @@ interface ResolvedSchedule {
 const DERIVED_FIELDS = [
   'services',
   'professional',
+  'location',
   'slots',
   'totalPrice',
   'totalDuration',
@@ -139,6 +144,9 @@ function toBusinessError(error: unknown): unknown {
   if (error instanceof ServiceSelectionError) {
     return new Error(`Error de validación: ${error.message}`);
   }
+  if (error instanceof LocationNotFoundError) {
+    return new Error(LOCATION_UNKNOWN);
+  }
   if (error instanceof Error && error.name === 'ValidationError') {
     const errors = (error as Error & { errors?: Record<string, Error> }).errors;
     const messages = Object.values(errors ?? {})
@@ -148,6 +156,9 @@ function toBusinessError(error: unknown): unknown {
   }
   return error;
 }
+
+const LOCATION_REQUIRED = 'Error de validación: debes elegir un local';
+const LOCATION_UNKNOWN = 'Error de validación: el local seleccionado no existe';
 
 @Injectable()
 export class BookingsService {
@@ -175,11 +186,15 @@ export class BookingsService {
 
       // NO validamos duplicados por cliente porque un cliente puede reservar
       // con diferentes profesionales en el mismo horario.
+      const location = await this.resolveRequestedLocation(
+        createBookingDto.location,
+      );
       const resolved = await this.resolveSchedule({
         serviceIds: serviceIdsOf(createBookingDto.services),
         professionalId: createBookingDto.professional.id,
         date,
         time,
+        location,
       });
 
       const cancelToken = generateCancelToken();
@@ -283,7 +298,14 @@ export class BookingsService {
 
       let professionalName = current.professional?.name;
       if (target.status !== CANCELLED && (scheduleChanged || reactivated)) {
-        const resolved = await this.resolveSchedule(target, id);
+        // The stored location is validated against and never changes; a
+        // booking without one belongs to the default location.
+        const location = current.location?.id
+          ? { id: current.location.id, name: current.location.name }
+          : await this.defaultLocation();
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { location: _unchanged, ...resolved } =
+          await this.resolveSchedule({ ...target, location }, id);
         Object.assign(changes, resolved);
         professionalName = resolved.professional.name;
       }
@@ -398,20 +420,40 @@ export class BookingsService {
     time: string,
     professionalId: string,
     serviceIds: string[],
+    locationId?: string,
   ): Promise<{ available: boolean }> {
     try {
       const selection = await this.catalogService.resolveServices(
         Array.isArray(serviceIds) ? serviceIds : [],
       );
+      // Without `locationId` the default location is used; an unknown or
+      // inactive one is simply not available.
+      const location = await this.catalogService
+        .getLocation(typeof locationId === 'string' ? locationId : undefined)
+        .catch((error: unknown) => {
+          if (error instanceof LocationNotFoundError) return null;
+          throw error;
+        });
+      if (!location) {
+        return { available: false };
+      }
       const slots = await this.windowSlotsFor(
         date,
         time,
         selection.totalDuration,
+        location.id,
       );
       const offersAll = selection.professionals.some(
         (professional) => professional.id === professionalId,
       );
-      if (!slots || !offersAll) {
+      if (
+        !slots ||
+        !offersAll ||
+        !(await this.catalogService.worksAtLocation(
+          professionalId,
+          location.id,
+        ))
+      ) {
         return { available: false };
       }
       const occupied = await this.occupiedSlotsFor(date, professionalId);
@@ -486,6 +528,16 @@ export class BookingsService {
       request.professionalId,
       selection,
     );
+    if (
+      !(await this.catalogService.worksAtLocation(
+        professional.id,
+        request.location.id,
+      ))
+    ) {
+      throw new Error(
+        `Error de validación: ${professional.name} no trabaja en ${request.location.name}`,
+      );
+    }
     const slots = await this.resolveWindow(request, selection);
 
     const occupied = await this.occupiedSlotsFor(
@@ -504,8 +556,34 @@ export class BookingsService {
       totalPrice: selection.totalPrice,
       totalDuration: selection.totalDuration,
       professional: { id: professional.id, name: professional.name },
+      location: request.location,
       slots,
     };
+  }
+
+  /**
+   * The location a new booking is made at. A given id must be an active
+   * location; without one the default location is used only while a single
+   * location is active.
+   */
+  private async resolveRequestedLocation(
+    requested: { id?: unknown } | undefined | null,
+  ): Promise<{ id: string; name: string }> {
+    if (requested?.id !== undefined && requested?.id !== null) {
+      const id = typeof requested.id === 'string' ? requested.id : '';
+      const location = await this.catalogService.getLocation(id);
+      return { id: location.id, name: location.name };
+    }
+    const active = await this.catalogService.getActiveLocations();
+    if (active.length > 1) {
+      throw new Error(LOCATION_REQUIRED);
+    }
+    return this.defaultLocation();
+  }
+
+  private async defaultLocation(): Promise<{ id: string; name: string }> {
+    const { id, name } = await this.catalogService.getLocation();
+    return { id, name };
   }
 
   /** The professional must exist and offer every selected service. */
@@ -536,7 +614,7 @@ export class BookingsService {
 
   /** Slots of the whole service block, which must fit in the day schedule. */
   private async resolveWindow(
-    { date, time }: ScheduleRequest,
+    { date, time, location }: ScheduleRequest,
     selection: ServiceSelection,
   ): Promise<string[]> {
     if (dayOfWeekFromIsoDate(date) === null) {
@@ -546,6 +624,7 @@ export class BookingsService {
       date,
       time,
       selection.totalDuration,
+      location.id,
     );
     if (!slots) {
       const names = selection.services
@@ -558,17 +637,21 @@ export class BookingsService {
     return slots;
   }
 
-  /** Consecutive slots a block of `totalDuration` minutes needs, or null. */
+  /**
+   * Consecutive slots a block of `totalDuration` minutes needs at the given
+   * location (its own schedule decides the offered starts), or null.
+   */
   private async windowSlotsFor(
     date: string,
     time: string,
     totalDuration: number,
+    locationId: string,
   ): Promise<string[] | null> {
     const dayOfWeek = dayOfWeekFromIsoDate(date);
     if (dayOfWeek === null) {
       return null;
     }
-    const schedule = await this.catalogService.getSchedule();
+    const schedule = await this.catalogService.getSchedule(locationId);
     if (!offeredStarts(dayOfWeek, schedule).includes(time)) {
       return null;
     }
