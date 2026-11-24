@@ -1,10 +1,8 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
-  Patch,
   Post,
   Put,
   UseGuards,
@@ -14,12 +12,6 @@ import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import {
   parseLocationCreate,
   parseLocationUpdate,
-  parseOptionalPhotoDataUrl,
-  parseProfessionalCreate,
-  parseProfessionalPhotoBody,
-  parseProfessionalUpdate,
-  parseServiceCreate,
-  parseServiceUpdate,
   parsePublicAvailability,
   parseStartInterval,
   parseWeeklySchedule,
@@ -29,15 +21,14 @@ import {
   PublicAvailabilitySettings,
   WeeklySchedule,
 } from '../catalog/catalog.config';
-import {
-  AdminCatalog,
-  AdminProfessional,
-  AdminService,
-  CatalogService,
-} from '../catalog/catalog.service';
+import { AdminCatalog, CatalogService } from '../catalog/catalog.service';
 import { ScheduleImpactService, currentBusinessDate } from './schedule-impact';
 
-/** Business configuration endpoints, all behind the admin key. */
+/**
+ * Business configuration endpoints, all behind the admin key: the catalog
+ * read, schedules, locations and the public availability settings. The
+ * professional and service routes live in the catalog module.
+ */
 @Controller('admin')
 @UseGuards(AdminKeyGuard)
 export class AdminController {
@@ -50,90 +41,6 @@ export class AdminController {
   @Get('catalog')
   getCatalog(): Promise<AdminCatalog> {
     return this.catalog.getAdminCatalog();
-  }
-
-  @Post('professionals')
-  async createProfessional(@Body() body: unknown): Promise<AdminProfessional> {
-    const input = parseProfessionalCreate(body);
-    const photo = parseOptionalPhotoDataUrl(body);
-    return this.catalogAdmin.createProfessional(input, photo);
-  }
-
-  @Patch('professionals/:id')
-  async updateProfessional(
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ): Promise<AdminProfessional> {
-    return this.catalogAdmin.updateProfessional(
-      id,
-      parseProfessionalUpdate(body),
-    );
-  }
-
-  @Put('professionals/:id/photo')
-  setProfessionalPhoto(
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ): Promise<AdminProfessional> {
-    return this.catalogAdmin.setProfessionalPhoto(
-      id,
-      parseProfessionalPhotoBody(body),
-    );
-  }
-
-  @Delete('professionals/:id/photo')
-  removeProfessionalPhoto(@Param('id') id: string): Promise<AdminProfessional> {
-    return this.catalogAdmin.removeProfessionalPhoto(id);
-  }
-
-  /** Soft delete: the professional stays in the database, inactive. */
-  @Delete('professionals/:id')
-  deleteProfessional(@Param('id') id: string): Promise<AdminProfessional> {
-    return this.catalogAdmin.updateProfessional(id, { active: false });
-  }
-
-  /**
-   * Hard delete. Refused with 409 while the professional has future confirmed
-   * bookings or is the only professional of a service.
-   */
-  @Delete('professionals/:id/permanent')
-  deleteProfessionalPermanently(
-    @Param('id') id: string,
-  ): Promise<{ id: string; deleted: true }> {
-    return this.catalogAdmin.deleteProfessionalPermanently(
-      id,
-      currentBusinessDate(),
-    );
-  }
-
-  @Post('services')
-  async createService(@Body() body: unknown): Promise<AdminService> {
-    return this.catalogAdmin.createService(parseServiceCreate(body));
-  }
-
-  @Patch('services/:id')
-  async updateService(
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ): Promise<AdminService> {
-    return this.catalogAdmin.updateService(id, parseServiceUpdate(body));
-  }
-
-  /** Soft delete: the service stays in the database, inactive. */
-  @Delete('services/:id')
-  deleteService(@Param('id') id: string): Promise<AdminService> {
-    return this.catalogAdmin.updateService(id, { active: false });
-  }
-
-  /** Hard delete. Refused with 409 while the service has future confirmed bookings. */
-  @Delete('services/:id/permanent')
-  deleteServicePermanently(
-    @Param('id') id: string,
-  ): Promise<{ id: string; deleted: true }> {
-    return this.catalogAdmin.deleteServicePermanently(
-      id,
-      currentBusinessDate(),
-    );
   }
 
   /**

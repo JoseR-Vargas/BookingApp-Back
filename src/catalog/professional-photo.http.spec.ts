@@ -1,13 +1,16 @@
 import { Server } from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { DomainErrorFilter } from '../shared/infrastructure/http/domain-error.filter';
 import * as request from 'supertest';
 import { AdminController } from '../admin/admin.controller';
 import { ScheduleImpactService } from '../admin/schedule-impact';
-import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogController } from './catalog.controller';
-import { CatalogService } from './catalog.service';
-import { FakeModel, createFakeCatalog } from './catalog.testing';
+import {
+  FakeModel,
+  createFakeCatalog,
+  CATALOG_ROUTE_CONTROLLERS,
+} from './catalog.testing';
 
 const PHOTO_ERROR = 'La foto debe ser PNG, JPG o WebP de hasta 200 KB.';
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -64,23 +67,18 @@ describe('Professional photo HTTP contract', () => {
       updatedAt: UPDATED_AT,
     };
     const moduleRef = await Test.createTestingModule({
-      controllers: [CatalogController, AdminController],
+      controllers: [
+        CatalogController,
+        AdminController,
+        ...CATALOG_ROUTE_CONTROLLERS,
+      ],
       providers: [
-        { provide: CatalogService, useValue: fake.catalog },
-        {
-          provide: CatalogAdminService,
-          useValue: new CatalogAdminService(
-            fake.professionalModel,
-            fake.serviceModel,
-            fake.settingsModel,
-            fake.bookingModel,
-            fake.locationModel,
-          ),
-        },
+        ...fake.providers,
         { provide: ScheduleImpactService, useValue: {} },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalFilters(new DomainErrorFilter());
     app.setGlobalPrefix('api');
     await app.init();
   });

@@ -105,9 +105,22 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   without touching the domain or the use cases. Spec 10 made its rules and use cases return
   `Result` (listed in `RESULT_MODULES`); the HTTP answers did not change.
 
-Modules that return `Result`: `RESULT_MODULES = ['branding']`.
+- `catalog` (spec 11, professionals, services, service selection and photos): same layout and
+  `Result` rules; `locations`, schedules and public-availability settings stay in the old style
+  until spec 12. `CatalogService` and `CatalogAdminService` are temporary facades (`@deprecated`)
+  that wrap the use cases for `bookings`, `availability`, `admin` and the WhatsApp bot, and are
+  deleted as each consumer migrates.
 
-Others (`catalog`, `availability`, `bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog']`.
+
+Temporary ports (they read data owned by a module that has not migrated yet):
+
+| Port | Adapter today | Replaced by |
+| --- | --- | --- |
+| `BookingActivity` | reads the bookings collection | spec 13 (`bookings`) |
+| `LocationDirectory` | reads the locations collection | spec 12 (`locations`) |
+
+Others (`availability`, `bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
 previous style and are migrated one per spec. Do not extend the previous style in new code.
 
 ## Commands

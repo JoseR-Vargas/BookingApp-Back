@@ -1,11 +1,14 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { DomainErrorFilter } from '../shared/infrastructure/http/domain-error.filter';
 import * as request from 'supertest';
-import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import { CatalogController } from '../catalog/catalog.controller';
 import { SCHEDULE } from '../catalog/catalog.config';
-import { CatalogService } from '../catalog/catalog.service';
-import { createFakeCatalog, createFakeModel } from '../catalog/catalog.testing';
+import {
+  createFakeCatalog,
+  createFakeModel,
+  CATALOG_ROUTE_CONTROLLERS,
+} from '../catalog/catalog.testing';
 import { AdminController } from './admin.controller';
 import { ScheduleImpactService } from './schedule-impact';
 
@@ -45,19 +48,13 @@ describe('Admin locations HTTP contract', () => {
       }),
     ]);
     const moduleRef = await Test.createTestingModule({
-      controllers: [AdminController, CatalogController],
+      controllers: [
+        AdminController,
+        CatalogController,
+        ...CATALOG_ROUTE_CONTROLLERS,
+      ],
       providers: [
-        { provide: CatalogService, useValue: fake.catalog },
-        {
-          provide: CatalogAdminService,
-          useValue: new CatalogAdminService(
-            fake.professionalModel,
-            fake.serviceModel,
-            fake.settingsModel,
-            fake.bookingModel,
-            fake.locationModel,
-          ),
-        },
+        ...fake.providers,
         {
           provide: ScheduleImpactService,
           useValue: new ScheduleImpactService(bookings as never),
@@ -65,6 +62,7 @@ describe('Admin locations HTTP contract', () => {
       ],
     }).compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalFilters(new DomainErrorFilter());
     app.setGlobalPrefix('api');
     await app.init();
   });

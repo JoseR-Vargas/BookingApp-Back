@@ -3,8 +3,39 @@
  * just the query surface the catalog code uses (equality and `$in` filters,
  * `$set` / `$setOnInsert`, upsert) so specs never need a database.
  */
+import { Provider } from '@nestjs/common';
 import { Model } from 'mongoose';
+import { SystemClock } from '../shared/infrastructure/system.clock';
+import { GetPublicCatalogUseCase } from './application/use-cases/get-public-catalog.use-case';
+import { CreateProfessionalUseCase } from './application/use-cases/professionals/create-professional.use-case';
+import { DeactivateProfessionalUseCase } from './application/use-cases/professionals/deactivate-professional.use-case';
+import { DeleteProfessionalPermanentlyUseCase } from './application/use-cases/professionals/delete-professional-permanently.use-case';
+import { FindActiveProfessionalUseCase } from './application/use-cases/professionals/find-active-professional.use-case';
+import { GetProfessionalPhotoUseCase } from './application/use-cases/professionals/get-professional-photo.use-case';
+import { ListProfessionalsForServiceUseCase } from './application/use-cases/professionals/list-professionals-for-service.use-case';
+import { ListProfessionalsUseCase } from './application/use-cases/professionals/list-professionals.use-case';
+import { ProfessionalWorksAtLocationUseCase } from './application/use-cases/professionals/professional-works-at-location.use-case';
+import { RemoveProfessionalPhotoUseCase } from './application/use-cases/professionals/remove-professional-photo.use-case';
+import { SetProfessionalPhotoUseCase } from './application/use-cases/professionals/set-professional-photo.use-case';
+import { UpdateProfessionalUseCase } from './application/use-cases/professionals/update-professional.use-case';
+import { ResolveServiceSelectionUseCase } from './application/use-cases/resolve-service-selection.use-case';
+import { CreateServiceUseCase } from './application/use-cases/services/create-service.use-case';
+import { DeactivateServiceUseCase } from './application/use-cases/services/deactivate-service.use-case';
+import { DeleteServicePermanentlyUseCase } from './application/use-cases/services/delete-service-permanently.use-case';
+import { FindActiveServiceUseCase } from './application/use-cases/services/find-active-service.use-case';
+import { ListServicesUseCase } from './application/use-cases/services/list-services.use-case';
+import { UpdateServiceUseCase } from './application/use-cases/services/update-service.use-case';
+import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogService } from './catalog.service';
+import { MongoBookingActivityAdapter } from './infrastructure/bookings/mongo-booking-activity.adapter';
+import { CatalogPhotoController } from './infrastructure/http/catalog-photo.controller';
+import { ProfessionalPhotosAdminController } from './infrastructure/http/professional-photos-admin.controller';
+import { ProfessionalsAdminController } from './infrastructure/http/professionals-admin.controller';
+import { ServicesAdminController } from './infrastructure/http/services-admin.controller';
+import { MongoLocationDirectoryAdapter } from './infrastructure/locations/mongo-location-directory.adapter';
+import { CatalogSeeder } from './infrastructure/persistence/mongo/catalog.seeder';
+import { MongoProfessionalRepository } from './infrastructure/persistence/mongo/mongo-professional.repository';
+import { MongoServiceRepository } from './infrastructure/persistence/mongo/mongo-service.repository';
 
 type Doc = Record<string, any>;
 type Filter = Record<string, any>;
@@ -174,7 +205,18 @@ export function createFakeModel(initial: Doc[] = []): FakeModel & Model<any> {
   return model as unknown as FakeModel & Model<any>;
 }
 
-/** CatalogService over empty fake models; `onModuleInit` seeds them. */
+/** The catalog controllers that serve professional, service and photo routes. */
+export const CATALOG_ROUTE_CONTROLLERS = [
+  CatalogPhotoController,
+  ProfessionalsAdminController,
+  ProfessionalPhotosAdminController,
+  ServicesAdminController,
+];
+
+/**
+ * The whole catalog (facades, use cases and the MongoDB adapters) over the
+ * fake models. `onModuleInit` seeds the models with the defaults.
+ */
 export function createFakeCatalog(initial?: {
   professionals?: Doc[];
   services?: Doc[];
@@ -187,14 +229,121 @@ export function createFakeCatalog(initial?: {
   const settingsModel = createFakeModel(initial?.settings);
   const bookingModel = createFakeModel(initial?.bookings);
   const locationModel = createFakeModel(initial?.locations);
-  const catalog = new CatalogService(
+
+  const professionals = new MongoProfessionalRepository(professionalModel);
+  const services = new MongoServiceRepository(serviceModel);
+  const activity = new MongoBookingActivityAdapter(bookingModel);
+  const locations = new MongoLocationDirectoryAdapter(
+    locationModel,
+    settingsModel,
+  );
+  const clock = new SystemClock();
+
+  const updateProfessional = new UpdateProfessionalUseCase(
+    professionals,
+    locations,
+  );
+  const updateService = new UpdateServiceUseCase(services, professionals);
+  const useCases = {
+    listProfessionals: new ListProfessionalsUseCase(professionals),
+    createProfessional: new CreateProfessionalUseCase(
+      professionals,
+      locations,
+      activity,
+      clock,
+    ),
+    updateProfessional,
+    deactivateProfessional: new DeactivateProfessionalUseCase(
+      updateProfessional,
+    ),
+    setProfessionalPhoto: new SetProfessionalPhotoUseCase(
+      professionals,
+      locations,
+      clock,
+    ),
+    removeProfessionalPhoto: new RemoveProfessionalPhotoUseCase(
+      professionals,
+      locations,
+    ),
+    getProfessionalPhoto: new GetProfessionalPhotoUseCase(professionals),
+    deleteProfessionalPermanently: new DeleteProfessionalPermanentlyUseCase(
+      professionals,
+      professionals,
+      services,
+      services,
+      activity,
+    ),
+    findActiveProfessional: new FindActiveProfessionalUseCase(professionals),
+    listProfessionalsForService: new ListProfessionalsForServiceUseCase(
+      services,
+      professionals,
+    ),
+    professionalWorksAtLocation: new ProfessionalWorksAtLocationUseCase(
+      professionals,
+      locations,
+    ),
+    listServices: new ListServicesUseCase(services),
+    createService: new CreateServiceUseCase(services, professionals, activity),
+    updateService,
+    deactivateService: new DeactivateServiceUseCase(updateService),
+    deleteServicePermanently: new DeleteServicePermanentlyUseCase(
+      services,
+      services,
+      activity,
+    ),
+    findActiveService: new FindActiveServiceUseCase(services),
+    resolveServiceSelection: new ResolveServiceSelectionUseCase(
+      services,
+      professionals,
+      locations,
+    ),
+    getPublicCatalog: new GetPublicCatalogUseCase(services, professionals),
+  };
+  const seeder = new CatalogSeeder(
     professionalModel,
     serviceModel,
     settingsModel,
     locationModel,
   );
+  const catalog = new CatalogService(
+    seeder,
+    settingsModel,
+    locationModel,
+    useCases.getPublicCatalog,
+    useCases.listProfessionals,
+    useCases.listServices,
+    useCases.findActiveProfessional,
+    useCases.findActiveService,
+    useCases.getProfessionalPhoto,
+    useCases.listProfessionalsForService,
+    useCases.professionalWorksAtLocation,
+    useCases.resolveServiceSelection,
+  );
+  const admin = new CatalogAdminService(
+    serviceModel,
+    settingsModel,
+    locationModel,
+  );
+
+  /** For `Test.createTestingModule({ providers })`: the use cases above, by class. */
+  const useCaseProviders: Provider[] = Object.values(useCases).map(
+    (useCase) => ({
+      provide: (useCase as object).constructor,
+      useValue: useCase,
+    }),
+  );
+  /** The use cases and both facades (Nest runs `onModuleInit` of the catalog, which seeds). */
+  const providers: Provider[] = [
+    { provide: CatalogService, useValue: catalog },
+    { provide: CatalogAdminService, useValue: admin },
+    ...useCaseProviders,
+  ];
   return {
     catalog,
+    admin,
+    useCases,
+    providers,
+    useCaseProviders,
     professionalModel,
     serviceModel,
     settingsModel,
