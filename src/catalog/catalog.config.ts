@@ -1,3 +1,7 @@
+import type { WeeklySchedule } from '../shared/domain/schedule/schedule';
+import { DEFAULT_PUBLIC_AVAILABILITY } from './domain/public-availability';
+import { SEED_SCHEDULE } from './domain/seed-schedule';
+
 export interface Professional {
   id: string;
   name: string;
@@ -25,29 +29,11 @@ export interface Service {
   icon: string;
 }
 
-/** 0 = Sunday ... 6 = Saturday, matching Date.prototype.getDay(). */
-export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-export type DaySchedule =
-  | { closed: true }
-  /** `open` and `close` are 'HH:mm' wall-clock strings; `close` is exclusive. */
-  | {
-      closed: false;
-      open: string;
-      close: string;
-      /**
-       * Start times offered that day ('HH:mm', on the 30-minute grid, inside
-       * [open, close), sorted). Absent = the global start interval applies.
-       */
-      starts?: string[];
-    };
-
-export interface WeeklySchedule {
-  weekly: Record<DayOfWeek, DaySchedule>;
-  slotIntervalMinutes: number;
-  /** Minutes between the start times offered to the public; a multiple of 30. */
-  startIntervalMinutes: number;
-}
+export type {
+  DayOfWeek,
+  DaySchedule,
+  WeeklySchedule,
+} from '../shared/domain/schedule/schedule';
 
 /** A location as the public catalog shows it. */
 export interface PublicLocation {
@@ -130,35 +116,10 @@ export const SERVICES: Service[] = [
   },
 ];
 
-/**
- * What the public availability page (`/disponibilidad`) shows. `serviceIds: null`
- * publishes every active service.
- */
-export interface PublicAvailabilitySettings {
-  enabled: boolean;
-  days: number;
-  serviceIds: string[] | null;
-}
+export type { PublicAvailabilitySettings } from './domain/public-availability';
 
 /** Off until the admin turns it on; a stored document without it reads as this. */
-export const PUBLIC_AVAILABILITY: PublicAvailabilitySettings = {
-  enabled: false,
-  days: 7,
-  serviceIds: null,
-};
+export const PUBLIC_AVAILABILITY = DEFAULT_PUBLIC_AVAILABILITY;
 
-const WEEKDAY: DaySchedule = { closed: false, open: '09:00', close: '20:00' };
-
-export const SCHEDULE: WeeklySchedule = {
-  weekly: {
-    0: { closed: true },
-    1: WEEKDAY,
-    2: WEEKDAY,
-    3: WEEKDAY,
-    4: WEEKDAY,
-    5: WEEKDAY,
-    6: { closed: false, open: '09:00', close: '18:00' },
-  },
-  slotIntervalMinutes: 30,
-  startIntervalMinutes: 30,
-};
+/** The schedule every new installation and every new location starts with. */
+export const SCHEDULE: WeeklySchedule = SEED_SCHEDULE;

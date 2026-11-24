@@ -14,9 +14,10 @@ import {
   BookingActivity,
 } from '../../ports/booking-activity.port';
 import {
-  LOCATION_DIRECTORY,
-  LocationDirectory,
-} from '../../ports/location-directory.port';
+  activeLocationIds,
+  defaultLocationId,
+} from '../../../domain/location.rules';
+import { LOCATION_READER, LocationReader } from '../../ports/location.reader';
 import {
   PROFESSIONAL_WRITER,
   ProfessionalWriter,
@@ -38,7 +39,7 @@ export interface CreateProfessionalCommand {
 export class CreateProfessionalUseCase {
   constructor(
     @Inject(PROFESSIONAL_WRITER) private readonly writer: ProfessionalWriter,
-    @Inject(LOCATION_DIRECTORY) private readonly locations: LocationDirectory,
+    @Inject(LOCATION_READER) private readonly locations: LocationReader,
     @Inject(BOOKING_ACTIVITY) private readonly activity: BookingActivity,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -47,13 +48,13 @@ export class CreateProfessionalUseCase {
     command: CreateProfessionalCommand,
   ): Promise<Result<ProfessionalView>> {
     const { locations, ...fields } = command.input;
-    const defaultId = await this.locations.defaultId();
+    const defaultId = defaultLocationId(await this.locations.list());
     if (defaultId === null) return err(new NoActiveLocationError());
     let locationIds = [defaultId];
     if (locations) {
       const checked = ensureActiveLocations(
         locations,
-        await this.locations.activeIds(),
+        activeLocationIds(await this.locations.list()),
       );
       if (!checked.ok) return checked;
       locationIds = checked.value;

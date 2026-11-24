@@ -3,10 +3,7 @@ import { CLOCK, Clock } from '../../../../shared/application/clock.port';
 import { Result, err } from '../../../../shared/domain/result';
 import { ProfessionalNotFoundError } from '../../../domain/catalog.errors';
 import { PhotoUpload } from '../../../domain/professional';
-import {
-  LOCATION_DIRECTORY,
-  LocationDirectory,
-} from '../../ports/location-directory.port';
+import { LOCATION_READER, LocationReader } from '../../ports/location.reader';
 import {
   PROFESSIONAL_PHOTO_STORE,
   ProfessionalPhotoStore,
@@ -25,7 +22,7 @@ export class SetProfessionalPhotoUseCase {
   constructor(
     @Inject(PROFESSIONAL_PHOTO_STORE)
     private readonly photos: ProfessionalPhotoStore,
-    @Inject(LOCATION_DIRECTORY) private readonly locations: LocationDirectory,
+    @Inject(LOCATION_READER) private readonly locations: LocationReader,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 

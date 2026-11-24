@@ -1,16 +1,28 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleImpactService } from '../admin/schedule-impact';
 import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
 import { CLOCK } from '../shared/application/clock.port';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
-import { LOCATION_DIRECTORY } from './application/ports/location-directory.port';
+import { LEGACY_SCHEDULE_READER } from './application/ports/legacy-schedule.reader';
+import { LOCATION_READER } from './application/ports/location.reader';
+import { LOCATION_WRITER } from './application/ports/location.writer';
+import { PUBLIC_AVAILABILITY_READER } from './application/ports/public-availability.reader';
+import { PUBLIC_AVAILABILITY_WRITER } from './application/ports/public-availability.writer';
 import { PROFESSIONAL_PHOTO_STORE } from './application/ports/professional-photo.store';
 import { PROFESSIONAL_READER } from './application/ports/professional.reader';
 import { PROFESSIONAL_WRITER } from './application/ports/professional.writer';
 import { SERVICE_READER } from './application/ports/service.reader';
 import { SERVICE_WRITER } from './application/ports/service.writer';
 import { GetPublicCatalogUseCase } from './application/use-cases/get-public-catalog.use-case';
+import { CreateLocationUseCase } from './application/use-cases/locations/create-location.use-case';
+import { EnsurePrincipalLocationUseCase } from './application/use-cases/locations/ensure-principal-location.use-case';
+import { GetLocationUseCase } from './application/use-cases/locations/get-location.use-case';
+import { ListLocationsUseCase } from './application/use-cases/locations/list-locations.use-case';
+import { ResolveDefaultLocationUseCase } from './application/use-cases/locations/resolve-default-location.use-case';
+import { SaveLocationScheduleUseCase } from './application/use-cases/locations/save-location-schedule.use-case';
+import { UpdateLocationUseCase } from './application/use-cases/locations/update-location.use-case';
 import { CreateProfessionalUseCase } from './application/use-cases/professionals/create-professional.use-case';
 import { DeactivateProfessionalUseCase } from './application/use-cases/professionals/deactivate-professional.use-case';
 import { DeleteProfessionalPermanentlyUseCase } from './application/use-cases/professionals/delete-professional-permanently.use-case';
@@ -29,16 +41,30 @@ import { DeleteServicePermanentlyUseCase } from './application/use-cases/service
 import { FindActiveServiceUseCase } from './application/use-cases/services/find-active-service.use-case';
 import { ListServicesUseCase } from './application/use-cases/services/list-services.use-case';
 import { UpdateServiceUseCase } from './application/use-cases/services/update-service.use-case';
+import { GetPublicAvailabilityUseCase } from './application/use-cases/settings/get-public-availability.use-case';
+import { SavePublicAvailabilityUseCase } from './application/use-cases/settings/save-public-availability.use-case';
 import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogController } from './catalog.controller';
 import { CatalogService } from './catalog.service';
 import { MongoBookingActivityAdapter } from './infrastructure/bookings/mongo-booking-activity.adapter';
 import { CatalogPhotoController } from './infrastructure/http/catalog-photo.controller';
+import { LocationsAdminController } from './infrastructure/http/locations-admin.controller';
 import { ProfessionalPhotosAdminController } from './infrastructure/http/professional-photos-admin.controller';
 import { ProfessionalsAdminController } from './infrastructure/http/professionals-admin.controller';
+import { PublicAvailabilityAdminController } from './infrastructure/http/public-availability-admin.controller';
+import { ScheduleAdminController } from './infrastructure/http/schedule-admin.controller';
 import { ServicesAdminController } from './infrastructure/http/services-admin.controller';
-import { MongoLocationDirectoryAdapter } from './infrastructure/locations/mongo-location-directory.adapter';
+import {
+  BusinessSettingsRecord,
+  BusinessSettingsSchema,
+} from './infrastructure/persistence/mongo/business-settings.entity';
 import { CatalogSeeder } from './infrastructure/persistence/mongo/catalog.seeder';
+import {
+  LocationRecord,
+  LocationSchema,
+} from './infrastructure/persistence/mongo/location.entity';
+import { MongoBusinessSettingsRepository } from './infrastructure/persistence/mongo/mongo-business-settings.repository';
+import { MongoLocationRepository } from './infrastructure/persistence/mongo/mongo-location.repository';
 import { MongoProfessionalRepository } from './infrastructure/persistence/mongo/mongo-professional.repository';
 import { MongoServiceRepository } from './infrastructure/persistence/mongo/mongo-service.repository';
 import {
@@ -49,11 +75,6 @@ import {
   ServiceRecord,
   ServiceSchema,
 } from './infrastructure/persistence/mongo/service.entity';
-import {
-  BusinessSettingsRecord,
-  BusinessSettingsSchema,
-} from './schemas/business-settings.schema';
-import { LocationRecord, LocationSchema } from './schemas/location.schema';
 
 /**
  * Composition root of the catalog: the only place where ports are bound to
@@ -78,10 +99,15 @@ import { LocationRecord, LocationSchema } from './schemas/location.schema';
     ProfessionalsAdminController,
     ProfessionalPhotosAdminController,
     ServicesAdminController,
+    LocationsAdminController,
+    ScheduleAdminController,
+    PublicAvailabilityAdminController,
   ],
   providers: [
     MongoProfessionalRepository,
     MongoServiceRepository,
+    MongoLocationRepository,
+    MongoBusinessSettingsRepository,
     { provide: PROFESSIONAL_READER, useExisting: MongoProfessionalRepository },
     { provide: PROFESSIONAL_WRITER, useExisting: MongoProfessionalRepository },
     {
@@ -90,9 +116,22 @@ import { LocationRecord, LocationSchema } from './schemas/location.schema';
     },
     { provide: SERVICE_READER, useExisting: MongoServiceRepository },
     { provide: SERVICE_WRITER, useExisting: MongoServiceRepository },
-    // Temporary ports: answered from other modules' collections until those migrate.
+    { provide: LOCATION_READER, useExisting: MongoLocationRepository },
+    { provide: LOCATION_WRITER, useExisting: MongoLocationRepository },
+    {
+      provide: LEGACY_SCHEDULE_READER,
+      useExisting: MongoBusinessSettingsRepository,
+    },
+    {
+      provide: PUBLIC_AVAILABILITY_READER,
+      useExisting: MongoBusinessSettingsRepository,
+    },
+    {
+      provide: PUBLIC_AVAILABILITY_WRITER,
+      useExisting: MongoBusinessSettingsRepository,
+    },
+    // Temporary port: answered from the bookings collection until `bookings` migrates (spec 13).
     { provide: BOOKING_ACTIVITY, useClass: MongoBookingActivityAdapter },
-    { provide: LOCATION_DIRECTORY, useClass: MongoLocationDirectoryAdapter },
     { provide: CLOCK, useClass: SystemClock },
     ListProfessionalsUseCase,
     CreateProfessionalUseCase,
@@ -113,6 +152,17 @@ import { LocationRecord, LocationSchema } from './schemas/location.schema';
     FindActiveServiceUseCase,
     ResolveServiceSelectionUseCase,
     GetPublicCatalogUseCase,
+    ListLocationsUseCase,
+    GetLocationUseCase,
+    ResolveDefaultLocationUseCase,
+    EnsurePrincipalLocationUseCase,
+    CreateLocationUseCase,
+    UpdateLocationUseCase,
+    SaveLocationScheduleUseCase,
+    GetPublicAvailabilityUseCase,
+    SavePublicAvailabilityUseCase,
+    // Counts the bookings a schedule leaves out of hours (`admin`, until spec 14).
+    ScheduleImpactService,
     CatalogSeeder,
     CatalogService,
     CatalogAdminService,

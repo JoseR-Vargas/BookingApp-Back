@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import { GetPublicCatalogUseCase } from './application/use-cases/get-public-catalog.use-case';
+import { GetLocationUseCase } from './application/use-cases/locations/get-location.use-case';
+import { ListLocationsUseCase } from './application/use-cases/locations/list-locations.use-case';
 import { FindActiveProfessionalUseCase } from './application/use-cases/professionals/find-active-professional.use-case';
 import { GetProfessionalPhotoUseCase } from './application/use-cases/professionals/get-professional-photo.use-case';
 import { ListProfessionalsForServiceUseCase } from './application/use-cases/professionals/list-professionals-for-service.use-case';
@@ -9,44 +9,35 @@ import { ListProfessionalsUseCase } from './application/use-cases/professionals/
 import { ProfessionalWorksAtLocationUseCase } from './application/use-cases/professionals/professional-works-at-location.use-case';
 import { ResolveServiceSelectionUseCase } from './application/use-cases/resolve-service-selection.use-case';
 import { FindActiveServiceUseCase } from './application/use-cases/services/find-active-service.use-case';
+import { GetPublicAvailabilityUseCase } from './application/use-cases/settings/get-public-availability.use-case';
 import { ListServicesUseCase } from './application/use-cases/services/list-services.use-case';
 import {
   AdminLocation,
   Catalog,
-  PUBLIC_AVAILABILITY,
   Professional,
   PublicAvailabilitySettings,
-  PublicLocation,
   Service,
   WeeklySchedule,
 } from './catalog.config';
+import { Location } from './domain/location';
 import {
-  NoActiveLocationError,
-  ServiceSelectionFailedError,
-} from './domain/catalog.errors';
+  PRINCIPAL_LOCATION,
+  defaultLocation,
+  toWeeklySchedule,
+} from './domain/location.rules';
+import { orThrow } from './facade-errors';
 import {
   AdminProfessional,
   AdminService,
+  toAdminLocation,
   toAdminProfessional,
   toAdminService,
+  toPublicLocation,
   toPublicProfessional,
   toPublicService,
 } from './infrastructure/http/catalog.presenter';
 import { CatalogSeeder } from './infrastructure/persistence/mongo/catalog.seeder';
-import {
-  LocationNotFoundError,
-  PRINCIPAL_LOCATION,
-  activeLocations,
-  loadLocations,
-  toWeeklySchedule,
-} from './locations';
-import {
-  BusinessSettingsRecord,
-  SCHEDULE_KEY,
-} from './schemas/business-settings.schema';
-import { LocationRecord } from './schemas/location.schema';
-import { ServiceSelection, ServiceSelectionError } from './service-selection';
-import { Result } from '../shared/domain/result';
+import { ServiceSelection } from './service-selection';
 
 export type { AdminProfessional, AdminService };
 
@@ -65,55 +56,22 @@ export interface StoredPhoto {
   data: Buffer;
 }
 
-export const toAdminLocation = (record: LocationRecord): AdminLocation => ({
-  ...toPublicLocation(record),
-  active: record.active,
-});
-
-export const toPublicLocation = (record: LocationRecord): PublicLocation => ({
-  id: record.id,
-  name: record.name,
-  address: record.address ?? '',
-  schedule: toWeeklySchedule(record),
-});
-
-/**
- * Hands a use case's value to a caller that still expects exceptions: the
- * errors the unmigrated modules recognize are rebuilt as they were (a
- * ServiceSelectionError, a LocationNotFoundError); any other business failure
- * is thrown as the domain error and ends in the same HTTP answer.
- */
-function orThrow<T>(result: Result<T>): T {
-  if (result.ok) {
-    return result.value;
-  }
-  const { error } = result;
-  if (error instanceof ServiceSelectionFailedError) {
-    throw new ServiceSelectionError(error.failure, error.serviceId);
-  }
-  if (error instanceof NoActiveLocationError) {
-    throw new LocationNotFoundError(PRINCIPAL_LOCATION.id);
-  }
-  throw error;
-}
-
 /**
  * The catalog the modules that are not migrated yet still call.
  *
- * @deprecated TEMPORARY FACADE (spec 11). It holds no business rule: it wraps
- * the use cases of `application/` and answers with the types and exceptions
- * `bookings`, `availability`, `admin` and the WhatsApp bot expect. Locations,
- * schedules and the public availability settings still live here until spec 12;
- * the facade is deleted when each consumer migrates and calls the use cases.
+ * @deprecated TEMPORARY FACADE (specs 11 and 12). It holds no business rule:
+ * it wraps the use cases of `application/` and answers with the types and
+ * exceptions `bookings`, `availability`, `admin` and the WhatsApp bot expect
+ * (a `LocationNotFoundError`, a `ServiceSelectionError`). It is deleted when
+ * each consumer migrates and calls the use cases.
  */
 @Injectable()
 export class CatalogService implements OnModuleInit {
   constructor(
     private readonly seeder: CatalogSeeder,
-    @InjectModel(BusinessSettingsRecord.name)
-    private readonly settingsModel: Model<BusinessSettingsRecord>,
-    @InjectModel(LocationRecord.name)
-    private readonly locationModel: Model<LocationRecord>,
+    private readonly listLocations: ListLocationsUseCase,
+    private readonly getLocationUseCase: GetLocationUseCase,
+    private readonly getPublicAvailabilityUseCase: GetPublicAvailabilityUseCase,
     private readonly getPublicCatalog: GetPublicCatalogUseCase,
     private readonly listProfessionals: ListProfessionalsUseCase,
     private readonly listServices: ListServicesUseCase,
@@ -157,11 +115,11 @@ export class CatalogService implements OnModuleInit {
   /** Admin catalog: everything, inactive items included. */
   async getAdminCatalog(): Promise<AdminCatalog> {
     const [locations, publicAvailability] = await Promise.all([
-      loadLocations(this.locationModel, this.settingsModel),
+      this.listLocations.execute('all').then(orThrow),
       this.getPublicAvailability(),
     ]);
-    const defaultLocation = activeLocations(locations)[0];
-    const defaultLocationId = defaultLocation?.id ?? PRINCIPAL_LOCATION.id;
+    const oldestActive = defaultLocation(locations);
+    const defaultLocationId = oldestActive?.id ?? PRINCIPAL_LOCATION.id;
     const [professionals, services] = await Promise.all([
       this.listProfessionals.execute({ scope: 'all', defaultLocationId }),
       this.listServices.execute({ scope: 'all' }),
@@ -169,7 +127,7 @@ export class CatalogService implements OnModuleInit {
     return {
       professionals: orThrow(professionals).map(toAdminProfessional),
       services: orThrow(services).map(toAdminService),
-      schedule: toWeeklySchedule(defaultLocation ?? locations[0]),
+      schedule: toWeeklySchedule(oldestActive ?? locations[0]),
       locations: locations.map(toAdminLocation),
       publicAvailability,
     };
@@ -177,11 +135,7 @@ export class CatalogService implements OnModuleInit {
 
   /** Public availability page settings; the default (off) when none is stored. */
   async getPublicAvailability(): Promise<PublicAvailabilitySettings> {
-    const stored = await this.settingsModel
-      .findOne({ key: SCHEDULE_KEY })
-      .lean<BusinessSettingsRecord | null>()
-      .exec();
-    return stored?.publicAvailability ?? { ...PUBLIC_AVAILABILITY };
+    return orThrow(await this.getPublicAvailabilityUseCase.execute());
   }
 
   /**
@@ -194,10 +148,8 @@ export class CatalogService implements OnModuleInit {
   }
 
   /** Active locations, oldest first (the first is the default). */
-  async getActiveLocations(): Promise<LocationRecord[]> {
-    return activeLocations(
-      await loadLocations(this.locationModel, this.settingsModel),
-    );
+  async getActiveLocations(): Promise<Location[]> {
+    return orThrow(await this.listLocations.execute('active'));
   }
 
   /** Id of the default location: the oldest active one. */
@@ -209,14 +161,8 @@ export class CatalogService implements OnModuleInit {
    * An active location by id; the default one when `id` is omitted.
    * @throws LocationNotFoundError for an unknown or inactive location.
    */
-  async getLocation(id?: string): Promise<LocationRecord> {
-    const active = await this.getActiveLocations();
-    const found =
-      id === undefined ? active[0] : active.find((l) => l.id === id);
-    if (!found) {
-      throw new LocationNotFoundError(id ?? PRINCIPAL_LOCATION.id);
-    }
-    return found;
+  async getLocation(id?: string): Promise<Location> {
+    return orThrow(await this.getLocationUseCase.execute(id));
   }
 
   /** Whether an active professional works at the given location. */

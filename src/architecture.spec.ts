@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATED_MODULES } from './architecture/migrated-modules';
 import { RESULT_MODULES } from './architecture/result-modules';
@@ -37,6 +38,30 @@ describe('architecture: errors as values', () => {
     const violations = RESULT_MODULES.flatMap((name) =>
       checkModule(join(SRC, name), { noThrow: true }),
     ).map((v) => formatViolation(v, SRC));
+    expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * `src/shared/domain/schedule` is the schedule model and rules that `catalog`
+ * and `availability` both import (spec 12): pure TypeScript, so no framework,
+ * no `process.env`, no `new Date()` and no `throw`. It lives under
+ * `shared/domain`, so the rules above already cover its imports; this pins the
+ * folder and its `throw`-free rule.
+ */
+describe('architecture: shared schedule core', () => {
+  const SCHEDULE_DIR = join(SRC, 'shared', 'domain', 'schedule');
+
+  it('exists, with the model and the rules', () => {
+    expect(readdirSync(SCHEDULE_DIR)).toEqual(
+      expect.arrayContaining(['schedule.ts', 'schedule.rules.ts']),
+    );
+  });
+
+  it('src/shared has no throw in domain or application', () => {
+    const violations = checkModule(join(SRC, 'shared'), {
+      noThrow: true,
+    }).map((v) => formatViolation(v, SRC));
     expect(violations).toEqual([]);
   });
 });

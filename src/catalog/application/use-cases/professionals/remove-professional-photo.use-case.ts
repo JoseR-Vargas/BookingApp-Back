@@ -1,10 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Result, err } from '../../../../shared/domain/result';
 import { ProfessionalNotFoundError } from '../../../domain/catalog.errors';
-import {
-  LOCATION_DIRECTORY,
-  LocationDirectory,
-} from '../../ports/location-directory.port';
+import { LOCATION_READER, LocationReader } from '../../ports/location.reader';
 import {
   PROFESSIONAL_PHOTO_STORE,
   ProfessionalPhotoStore,
@@ -17,7 +14,7 @@ export class RemoveProfessionalPhotoUseCase {
   constructor(
     @Inject(PROFESSIONAL_PHOTO_STORE)
     private readonly photos: ProfessionalPhotoStore,
-    @Inject(LOCATION_DIRECTORY) private readonly locations: LocationDirectory,
+    @Inject(LOCATION_READER) private readonly locations: LocationReader,
   ) {}
 
   async execute(id: string): Promise<Result<ProfessionalView>> {

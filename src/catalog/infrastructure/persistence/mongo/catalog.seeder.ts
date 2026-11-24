@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { EnsurePrincipalLocationUseCase } from '../../../application/use-cases/locations/ensure-principal-location.use-case';
 import { PROFESSIONALS, SCHEDULE, SERVICES } from '../../../catalog.config';
 import { insertIfAbsent } from '../../../insert-if-absent';
-import { ensurePrincipalLocation } from '../../../locations';
 import {
   BusinessSettingsRecord,
   SCHEDULE_KEY,
-} from '../../../schemas/business-settings.schema';
-import { LocationRecord } from '../../../schemas/location.schema';
+} from './business-settings.entity';
 import { ProfessionalRecord } from './professional.entity';
 import { ServiceRecord } from './service.entity';
 
@@ -16,8 +15,9 @@ import { ServiceRecord } from './service.entity';
  * Seeds the defaults of catalog.config.ts. Each document is inserted only if
  * its key is absent ($setOnInsert), so admin edits survive restarts and
  * concurrent instances can seed at the same time. The order is fixed:
- * professionals, services, settings, then the principal location (which
- * copies the settings' schedule).
+ * professionals, services, settings, then the principal location (the
+ * `EnsurePrincipalLocationUseCase` migration, which copies the settings'
+ * schedule).
  */
 @Injectable()
 export class CatalogSeeder {
@@ -28,8 +28,7 @@ export class CatalogSeeder {
     private readonly serviceModel: Model<ServiceRecord>,
     @InjectModel(BusinessSettingsRecord.name)
     private readonly settingsModel: Model<BusinessSettingsRecord>,
-    @InjectModel(LocationRecord.name)
-    private readonly locationModel: Model<LocationRecord>,
+    private readonly ensurePrincipalLocation: EnsurePrincipalLocationUseCase,
   ) {}
 
   async seed(): Promise<void> {
@@ -57,6 +56,6 @@ export class CatalogSeeder {
       },
     );
     // After the settings: "principal" copies their schedule.
-    await ensurePrincipalLocation(this.locationModel, this.settingsModel);
+    await this.ensurePrincipalLocation.execute();
   }
 }

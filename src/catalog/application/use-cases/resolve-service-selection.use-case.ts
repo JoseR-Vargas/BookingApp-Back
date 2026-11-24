@@ -8,10 +8,8 @@ import {
   checkServiceIds,
   pickServices,
 } from '../../domain/service-selection.rules';
-import {
-  LOCATION_DIRECTORY,
-  LocationDirectory,
-} from '../ports/location-directory.port';
+import { defaultLocationId } from '../../domain/location.rules';
+import { LOCATION_READER, LocationReader } from '../ports/location.reader';
 import {
   PROFESSIONAL_READER,
   ProfessionalReader,
@@ -34,7 +32,7 @@ export class ResolveServiceSelectionUseCase {
     @Inject(SERVICE_READER) private readonly services: ServiceReader,
     @Inject(PROFESSIONAL_READER)
     private readonly professionals: ProfessionalReader,
-    @Inject(LOCATION_DIRECTORY) private readonly locations: LocationDirectory,
+    @Inject(LOCATION_READER) private readonly locations: LocationReader,
   ) {}
 
   async execute(
@@ -51,9 +49,12 @@ export class ResolveServiceSelectionUseCase {
     const active = await this.professionals.list('active');
     let location: SelectionLocation | undefined;
     if (command.locationId !== undefined) {
-      const defaultLocationId = await this.locations.defaultId();
-      if (defaultLocationId === null) return err(new NoActiveLocationError());
-      location = { locationId: command.locationId, defaultLocationId };
+      const defaultId = defaultLocationId(await this.locations.list());
+      if (defaultId === null) return err(new NoActiveLocationError());
+      location = {
+        locationId: command.locationId,
+        defaultLocationId: defaultId,
+      };
     }
     return ok(buildServiceSelection(picked.value, active, location));
   }

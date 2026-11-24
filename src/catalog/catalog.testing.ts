@@ -25,6 +25,15 @@ import { DeleteServicePermanentlyUseCase } from './application/use-cases/service
 import { FindActiveServiceUseCase } from './application/use-cases/services/find-active-service.use-case';
 import { ListServicesUseCase } from './application/use-cases/services/list-services.use-case';
 import { UpdateServiceUseCase } from './application/use-cases/services/update-service.use-case';
+import { CreateLocationUseCase } from './application/use-cases/locations/create-location.use-case';
+import { EnsurePrincipalLocationUseCase } from './application/use-cases/locations/ensure-principal-location.use-case';
+import { GetLocationUseCase } from './application/use-cases/locations/get-location.use-case';
+import { ListLocationsUseCase } from './application/use-cases/locations/list-locations.use-case';
+import { ResolveDefaultLocationUseCase } from './application/use-cases/locations/resolve-default-location.use-case';
+import { SaveLocationScheduleUseCase } from './application/use-cases/locations/save-location-schedule.use-case';
+import { UpdateLocationUseCase } from './application/use-cases/locations/update-location.use-case';
+import { GetPublicAvailabilityUseCase } from './application/use-cases/settings/get-public-availability.use-case';
+import { SavePublicAvailabilityUseCase } from './application/use-cases/settings/save-public-availability.use-case';
 import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogService } from './catalog.service';
 import { MongoBookingActivityAdapter } from './infrastructure/bookings/mongo-booking-activity.adapter';
@@ -32,7 +41,11 @@ import { CatalogPhotoController } from './infrastructure/http/catalog-photo.cont
 import { ProfessionalPhotosAdminController } from './infrastructure/http/professional-photos-admin.controller';
 import { ProfessionalsAdminController } from './infrastructure/http/professionals-admin.controller';
 import { ServicesAdminController } from './infrastructure/http/services-admin.controller';
-import { MongoLocationDirectoryAdapter } from './infrastructure/locations/mongo-location-directory.adapter';
+import { LocationsAdminController } from './infrastructure/http/locations-admin.controller';
+import { PublicAvailabilityAdminController } from './infrastructure/http/public-availability-admin.controller';
+import { ScheduleAdminController } from './infrastructure/http/schedule-admin.controller';
+import { MongoBusinessSettingsRepository } from './infrastructure/persistence/mongo/mongo-business-settings.repository';
+import { MongoLocationRepository } from './infrastructure/persistence/mongo/mongo-location.repository';
 import { CatalogSeeder } from './infrastructure/persistence/mongo/catalog.seeder';
 import { MongoProfessionalRepository } from './infrastructure/persistence/mongo/mongo-professional.repository';
 import { MongoServiceRepository } from './infrastructure/persistence/mongo/mongo-service.repository';
@@ -205,12 +218,19 @@ export function createFakeModel(initial: Doc[] = []): FakeModel & Model<any> {
   return model as unknown as FakeModel & Model<any>;
 }
 
-/** The catalog controllers that serve professional, service and photo routes. */
+/**
+ * The catalog controllers that serve the professional, service, photo,
+ * location, schedule and public availability routes. They need the use cases
+ * of `createFakeCatalog().providers` and a `ScheduleImpactService`.
+ */
 export const CATALOG_ROUTE_CONTROLLERS = [
   CatalogPhotoController,
   ProfessionalsAdminController,
   ProfessionalPhotosAdminController,
   ServicesAdminController,
+  LocationsAdminController,
+  ScheduleAdminController,
+  PublicAvailabilityAdminController,
 ];
 
 /**
@@ -233,11 +253,15 @@ export function createFakeCatalog(initial?: {
   const professionals = new MongoProfessionalRepository(professionalModel);
   const services = new MongoServiceRepository(serviceModel);
   const activity = new MongoBookingActivityAdapter(bookingModel);
-  const locations = new MongoLocationDirectoryAdapter(
-    locationModel,
-    settingsModel,
-  );
+  const settings = new MongoBusinessSettingsRepository(settingsModel);
+  const locations = new MongoLocationRepository(locationModel, settings);
   const clock = new SystemClock();
+  const ensurePrincipalLocation = new EnsurePrincipalLocationUseCase(
+    locations,
+    locations,
+    settings,
+    clock,
+  );
 
   const updateProfessional = new UpdateProfessionalUseCase(
     professionals,
@@ -245,6 +269,22 @@ export function createFakeCatalog(initial?: {
   );
   const updateService = new UpdateServiceUseCase(services, professionals);
   const useCases = {
+    listLocations: new ListLocationsUseCase(locations),
+    getLocation: new GetLocationUseCase(locations),
+    resolveDefaultLocation: new ResolveDefaultLocationUseCase(locations),
+    ensurePrincipalLocation,
+    createLocation: new CreateLocationUseCase(locations, clock),
+    updateLocation: new UpdateLocationUseCase(locations, locations),
+    saveLocationSchedule: new SaveLocationScheduleUseCase(
+      locations,
+      locations,
+      ensurePrincipalLocation,
+    ),
+    getPublicAvailability: new GetPublicAvailabilityUseCase(settings),
+    savePublicAvailability: new SavePublicAvailabilityUseCase(
+      services,
+      settings,
+    ),
     listProfessionals: new ListProfessionalsUseCase(professionals),
     createProfessional: new CreateProfessionalUseCase(
       professionals,
@@ -303,12 +343,13 @@ export function createFakeCatalog(initial?: {
     professionalModel,
     serviceModel,
     settingsModel,
-    locationModel,
+    ensurePrincipalLocation,
   );
   const catalog = new CatalogService(
     seeder,
-    settingsModel,
-    locationModel,
+    useCases.listLocations,
+    useCases.getLocation,
+    useCases.getPublicAvailability,
     useCases.getPublicCatalog,
     useCases.listProfessionals,
     useCases.listServices,
@@ -320,9 +361,10 @@ export function createFakeCatalog(initial?: {
     useCases.resolveServiceSelection,
   );
   const admin = new CatalogAdminService(
-    serviceModel,
-    settingsModel,
-    locationModel,
+    useCases.saveLocationSchedule,
+    useCases.createLocation,
+    useCases.updateLocation,
+    useCases.savePublicAvailability,
   );
 
   /** For `Test.createTestingModule({ providers })`: the use cases above, by class. */
