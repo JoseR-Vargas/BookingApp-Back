@@ -114,20 +114,31 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   use cases for `bookings`, `availability`, `admin` and the WhatsApp bot, and are deleted as each
   consumer migrates. See [locations.md](./locations.md).
 
-Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog']`.
+- `availability` (spec 13: availability of a day and the public view): domain rules (`occupancy`,
+  `day-availability`, `public-view`) and errors, ports `OccupiedSlotsReader`, `CatalogLookup` and
+  `BusinessClock`, use cases `GetAvailability` and `GetPublicAvailability`, and controllers with the
+  same routes and answers as before. `AvailabilityService` is a temporary facade (`@deprecated`)
+  that wraps `GetAvailability` for the WhatsApp bot, and `availability.calculator.ts` only
+  re-exports the rules for `bookings`, `admin` and the bot. The module imports nothing from
+  `whatsapp`: "today" and the current time come from `BusinessClock` (`SystemBusinessClock`, which
+  reads `BUSINESS_TIMEZONE`).
+
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability']`.
 
 Temporary ports (they read data owned by a module that has not migrated yet):
 
 | Port | Adapter today | Replaced by |
 | --- | --- | --- |
-| `BookingActivity` | reads the bookings collection | spec 13 (`bookings`) |
+| `BookingActivity` | reads the bookings collection | spec 14 (`bookings`) |
+| `OccupiedSlotsReader` | `MongoOccupiedSlotsReader` reads the bookings collection through the `Booking` schema | spec 14 (`bookings`) |
+| `CatalogLookup` | `CatalogFacadeLookup` wraps the temporary `CatalogService` facade | when the facade is deleted (specs 17 and 26) |
 
 Other temporary crossings: the catalog's schedule controller counts the bookings a schedule leaves
 out of hours with `ScheduleImpactService` (`src/admin/schedule-impact.ts`), which stays in `admin`
-until spec 14; and `src/catalog/locations.ts` keeps `LocationNotFoundError` for `bookings` and
-`availability` until spec 13.
+until spec 14; and `src/catalog/locations.ts` keeps `LocationNotFoundError` for `bookings` and the
+`AvailabilityService` facade until they migrate.
 
-Others (`availability`, `bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
+Others (`bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
 previous style and are migrated one per spec. Do not extend the previous style in new code.
 
 ## Commands

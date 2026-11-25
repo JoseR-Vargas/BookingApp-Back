@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATED_MODULES } from './architecture/migrated-modules';
 import { RESULT_MODULES } from './architecture/result-modules';
@@ -63,5 +63,44 @@ describe('architecture: shared schedule core', () => {
       noThrow: true,
     }).map((v) => formatViolation(v, SRC));
     expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * `availability` asks for "the business's now" through the `BusinessClock`
+ * port instead of importing the WhatsApp bot (spec 13): nothing of the
+ * module that stays (layers, composition root, temporary facade and
+ * re-exports) may import from `src/whatsapp`.
+ */
+describe('architecture: availability does not depend on whatsapp', () => {
+  const AVAILABILITY = join(SRC, 'availability');
+  const ROOT_FILES = [
+    'availability.module.ts',
+    'availability.service.ts',
+    'availability.calculator.ts',
+  ];
+  const IMPORTS_WHATSAPP = /from\s+['"][^'"]*\/whatsapp(\/|['"])/;
+
+  const filesIn = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? filesIn(join(dir, entry.name))
+        : entry.name.endsWith('.ts')
+          ? [join(dir, entry.name)]
+          : [],
+    );
+
+  it('imports nothing from src/whatsapp', () => {
+    const files = [
+      ...['domain', 'application', 'infrastructure'].flatMap((layer) =>
+        filesIn(join(AVAILABILITY, layer)),
+      ),
+      ...ROOT_FILES.map((file) => join(AVAILABILITY, file)),
+    ];
+    const offenders = files.filter((file) =>
+      IMPORTS_WHATSAPP.test(readFileSync(file, 'utf8')),
+    );
+    expect(files.length).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
   });
 });

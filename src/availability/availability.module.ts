@@ -2,18 +2,42 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
 import { CatalogModule } from '../catalog/catalog.module';
-import { AvailabilityController } from './availability.controller';
+import { CLOCK } from '../shared/application/clock.port';
+import { SystemClock } from '../shared/infrastructure/system.clock';
+import { BUSINESS_CLOCK } from './application/ports/business-clock.port';
+import { CATALOG_LOOKUP } from './application/ports/catalog-lookup.port';
+import { OCCUPIED_SLOTS_READER } from './application/ports/occupied-slots.reader';
+import { GetAvailabilityUseCase } from './application/use-cases/get-availability.use-case';
+import { GetPublicAvailabilityUseCase } from './application/use-cases/get-public-availability.use-case';
 import { AvailabilityService } from './availability.service';
-import { PublicAvailabilityController } from './public-availability.controller';
-import { PublicAvailabilityService } from './public-availability.service';
+import { CatalogFacadeLookup } from './infrastructure/catalog/catalog-facade.lookup';
+import { AvailabilityController } from './infrastructure/http/availability.controller';
+import { PublicAvailabilityController } from './infrastructure/http/public-availability.controller';
+import { MongoOccupiedSlotsReader } from './infrastructure/persistence/mongo/mongo-occupied-slots.reader';
+import { SystemBusinessClock } from './infrastructure/system-business-clock';
 
+/**
+ * Composition root of availability: the only place where ports are bound to
+ * adapters. `AvailabilityService` is the temporary facade the WhatsApp bot
+ * still calls.
+ */
 @Module({
   imports: [
+    // Read-only, for the blocked slots (OccupiedSlotsReader, until spec 14).
     MongooseModule.forFeature([{ name: Booking.name, schema: BookingSchema }]),
     CatalogModule,
   ],
   controllers: [AvailabilityController, PublicAvailabilityController],
-  providers: [AvailabilityService, PublicAvailabilityService],
+  providers: [
+    // Temporary ports: they read data of modules that have not migrated yet.
+    { provide: OCCUPIED_SLOTS_READER, useClass: MongoOccupiedSlotsReader }, // spec 14
+    { provide: CATALOG_LOOKUP, useClass: CatalogFacadeLookup }, // facade deleted (specs 17 and 26)
+    { provide: CLOCK, useClass: SystemClock },
+    { provide: BUSINESS_CLOCK, useClass: SystemBusinessClock },
+    GetAvailabilityUseCase,
+    GetPublicAvailabilityUseCase,
+    AvailabilityService,
+  ],
   exports: [AvailabilityService],
 })
 export class AvailabilityModule {}
