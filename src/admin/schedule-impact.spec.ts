@@ -1,4 +1,6 @@
 import { WeeklySchedule } from '../catalog/catalog.config';
+import { CountAffectedBookingsUseCase } from './application/use-cases/count-affected-bookings.use-case';
+import { MongoUpcomingBookingsReader } from './infrastructure/mongo-upcoming-bookings.reader';
 import {
   ScheduleImpactService,
   currentBusinessDate,
@@ -137,7 +139,11 @@ describe('ScheduleImpactService', () => {
   const exec = jest.fn(() => Promise.resolve(found));
   const lean = jest.fn(() => ({ exec }));
   const bookingModel = { find: jest.fn(() => ({ lean })) };
-  const service = new ScheduleImpactService(bookingModel as never);
+  const service = new ScheduleImpactService(
+    new CountAffectedBookingsUseCase(
+      new MongoUpcomingBookingsReader(bookingModel as never),
+    ),
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();

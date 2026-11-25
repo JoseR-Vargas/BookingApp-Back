@@ -10,6 +10,8 @@ import {
   CATALOG_ROUTE_CONTROLLERS,
 } from '../catalog/catalog.testing';
 import { AdminController } from './admin.controller';
+import { CountAffectedBookingsUseCase } from '../admin/application/use-cases/count-affected-bookings.use-case';
+import { MongoUpcomingBookingsReader } from '../admin/infrastructure/mongo-upcoming-bookings.reader';
 import { ScheduleImpactService } from './schedule-impact';
 
 /** End-to-end over HTTP with in-memory models: guard, routing, status codes. */
@@ -52,7 +54,11 @@ describe('Admin HTTP contract', () => {
         ...fake.providers,
         {
           provide: ScheduleImpactService,
-          useValue: new ScheduleImpactService(bookings as never),
+          useValue: new ScheduleImpactService(
+            new CountAffectedBookingsUseCase(
+              new MongoUpcomingBookingsReader(bookings as never),
+            ),
+          ),
         },
       ],
     }).compile();

@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleImpactService } from '../admin/schedule-impact';
+import { UPCOMING_BOOKINGS_READER } from '../admin/application/ports/upcoming-bookings.reader';
+import { CountAffectedBookingsUseCase } from '../admin/application/use-cases/count-affected-bookings.use-case';
+import { MongoUpcomingBookingsReader } from '../admin/infrastructure/mongo-upcoming-bookings.reader';
 import { CLOCK } from '../shared/application/clock.port';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
@@ -165,6 +168,11 @@ import {
     GetPublicAvailabilityUseCase,
     SavePublicAvailabilityUseCase,
     // Counts the bookings a schedule leaves out of hours (`admin`, until spec 14).
+    {
+      provide: UPCOMING_BOOKINGS_READER,
+      useClass: MongoUpcomingBookingsReader,
+    },
+    CountAffectedBookingsUseCase,
     ScheduleImpactService,
     CatalogSeeder,
     CatalogService,

@@ -2,6 +2,12 @@ import { Module } from '@nestjs/common';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from './email.service';
+import { EMAIL_SENDER } from './application/ports/email-sender.port';
+import { PUBLIC_APP_URL } from './application/ports/public-app-url.port';
+import { SendBookingConfirmationUseCase } from './application/use-cases/send-booking-confirmation.use-case';
+import { SendCancellationConfirmationUseCase } from './application/use-cases/send-cancellation-confirmation.use-case';
+import { EnvPublicAppUrl } from './infrastructure/env-public-app-url';
+import { MailerEmailSender } from './infrastructure/mailer-email-sender';
 
 @Module({
   imports: [
@@ -23,7 +29,13 @@ import { EmailService } from './email.service';
       }),
     }),
   ],
-  providers: [EmailService],
+  providers: [
+    { provide: EMAIL_SENDER, useClass: MailerEmailSender },
+    { provide: PUBLIC_APP_URL, useClass: EnvPublicAppUrl },
+    SendBookingConfirmationUseCase,
+    SendCancellationConfirmationUseCase,
+    EmailService,
+  ],
   exports: [EmailService],
 })
 export class EmailModule {}
