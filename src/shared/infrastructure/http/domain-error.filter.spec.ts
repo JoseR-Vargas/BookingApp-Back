@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  InternalServerErrorException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -33,6 +34,7 @@ const nestBody = {
   unavailable: new ServiceUnavailableException(
     'Mensaje del dominio',
   ).getResponse(),
+  tenant: new InternalServerErrorException('Mensaje del dominio').getResponse(),
 };
 
 const STATUS: Record<DomainErrorKind, number> = {
@@ -41,6 +43,7 @@ const STATUS: Record<DomainErrorKind, number> = {
   conflict: 409,
   forbidden: 403,
   unavailable: 503,
+  tenant: 500,
 };
 
 describe('DomainErrorFilter (registered by configureApp)', () => {

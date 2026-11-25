@@ -1,9 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Types } from 'mongoose';
 import {
   DayOfWeek,
   DaySchedule,
 } from '../../../../shared/domain/schedule/schedule';
 import { PublicAvailabilitySettings } from '../../../domain/public-availability';
+import { tenantScopePlugin } from '../../../../shared/infrastructure/mongo/tenant-scope.plugin';
 
 /** Key of the single document that holds the weekly schedule. */
 export const SCHEDULE_KEY = 'schedule';
@@ -29,10 +31,17 @@ export class BusinessSettingsRecord {
   /** Public availability page settings; absent on documents stored before it existed. */
   @Prop({ type: Object })
   publicAvailability?: PublicAvailabilitySettings;
+
+  /** The business this document belongs to (spec 18). */
+  @Prop({ type: Types.ObjectId, required: false, index: true })
+  tenantId?: Types.ObjectId;
 }
 
 export const BusinessSettingsSchema = SchemaFactory.createForClass(
   BusinessSettingsRecord,
 );
+
+// Every document belongs to a business, and every query is filtered by it (spec 18).
+tenantScopePlugin(BusinessSettingsSchema);
 
 BusinessSettingsSchema.index({ key: 1 }, { unique: true });

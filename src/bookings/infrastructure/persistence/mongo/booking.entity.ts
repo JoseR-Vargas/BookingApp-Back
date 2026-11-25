@@ -5,6 +5,8 @@ import {
   BookedService,
   BookingStatus,
 } from '../../../domain/booking';
+import { tenantScopePlugin } from '../../../../shared/infrastructure/mongo/tenant-scope.plugin';
+import { Types } from 'mongoose';
 
 export { BOOKING_STATUSES };
 export type { BookedService, BookingStatus };
@@ -105,9 +107,16 @@ export class Booking extends Document {
    */
   @Prop({ type: String, select: false })
   cancelTokenHash?: string;
+
+  /** The business this document belongs to (spec 18). */
+  @Prop({ type: Types.ObjectId, required: false, index: true })
+  tenantId?: Types.ObjectId;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
+
+// Every document belongs to a business, and every query is filtered by it (spec 18).
+tenantScopePlugin(BookingSchema);
 
 /** Lookup by token on the public cancel endpoints. */
 BookingSchema.index({ cancelTokenHash: 1 }, { unique: true, sparse: true });

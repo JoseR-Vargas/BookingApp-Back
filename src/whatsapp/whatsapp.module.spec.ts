@@ -10,6 +10,8 @@ import { ProfessionalRecord } from '../catalog/schemas/professional.schema';
 import { ServiceRecord } from '../catalog/schemas/service.schema';
 import { BotHandler } from './bot/bot.handler';
 import { ConversationState } from './schemas/conversation-state.schema';
+import { TenantRecord } from '../tenancy/infrastructure/persistence/mongo/tenant.entity';
+import { TenantMigration } from '../tenancy/infrastructure/migration/tenant-migration';
 import { ProcessedMessage } from './schemas/processed-message.schema';
 import { AdminBookingNotifier } from './admin-booking.notifier';
 import { BOOKING_NOTIFIER } from '../bookings/application/ports/booking-notifier.port';
@@ -51,6 +53,11 @@ describe('WhatsappModule wiring (no WHATSAPP_* / BUSINESS_TIMEZONE env)', () => 
       .useValue({})
       .overrideProvider(getModelToken(ConversationState.name))
       .useValue({})
+      .overrideProvider(getModelToken(TenantRecord.name))
+      .useValue({})
+      // The migration needs a database connection; this module boots without one.
+      .overrideProvider(TenantMigration)
+      .useValue({ run: async () => ({ changed: false }) })
       .overrideProvider(getModelToken(ProfessionalRecord.name))
       .useValue({})
       .overrideProvider(getModelToken(ServiceRecord.name))

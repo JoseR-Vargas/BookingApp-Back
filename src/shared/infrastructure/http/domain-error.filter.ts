@@ -6,6 +6,7 @@ import {
   ExceptionFilter,
   ForbiddenException,
   HttpException,
+  InternalServerErrorException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ const TO_HTTP: Record<DomainErrorKind, (message: string) => HttpException> = {
   conflict: (message) => new ConflictException(message),
   forbidden: (message) => new ForbiddenException(message),
   unavailable: (message) => new ServiceUnavailableException(message),
+  tenant: (message) => new InternalServerErrorException(message),
 };
 
 /**

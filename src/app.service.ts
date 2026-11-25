@@ -14,9 +14,9 @@ export class AppService {
       endpoints: {
         bookings: '/api/bookings',
         statistics: '/api/bookings/statistics',
-        health: '/health'
+        health: '/health',
       },
-      documentation: 'API REST para sistema de reservas de citas'
+      documentation: 'API REST para sistema de reservas de citas',
     };
   }
 }

@@ -7,7 +7,13 @@ export type DomainErrorKind =
   | 'not-found'
   | 'conflict'
   | 'forbidden'
-  | 'unavailable';
+  | 'unavailable'
+  /**
+   * The tenant context is missing or names another business (spec 18). It is a
+   * programming error of the server, never a business failure of the request,
+   * so it answers 500.
+   */
+  | 'tenant';
 
 /**
  * Base class of every error a business rule can raise. It extends `Error`

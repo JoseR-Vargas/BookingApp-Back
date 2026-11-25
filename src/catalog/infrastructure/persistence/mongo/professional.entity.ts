@@ -1,4 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Types } from 'mongoose';
+import { tenantScopePlugin } from '../../../../shared/infrastructure/mongo/tenant-scope.plugin';
 
 export interface ProfessionalPhoto {
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
@@ -45,9 +47,16 @@ export class ProfessionalRecord {
    */
   @Prop({ type: [String], default: undefined })
   locationIds?: string[];
+
+  /** The business this document belongs to (spec 18). */
+  @Prop({ type: Types.ObjectId, required: false, index: true })
+  tenantId?: Types.ObjectId;
 }
 
 export const ProfessionalSchema =
   SchemaFactory.createForClass(ProfessionalRecord);
+
+// Every document belongs to a business, and every query is filtered by it (spec 18).
+tenantScopePlugin(ProfessionalSchema);
 
 ProfessionalSchema.index({ id: 1 }, { unique: true });

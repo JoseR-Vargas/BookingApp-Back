@@ -8,6 +8,7 @@ import { CLOCK } from '../shared/application/clock.port';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
 import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
+import { TenancyModule } from '../tenancy/tenancy.module';
 import { LEGACY_SCHEDULE_READER } from './application/ports/legacy-schedule.reader';
 import { LOCATION_READER } from './application/ports/location.reader';
 import { LOCATION_WRITER } from './application/ports/location.writer';
@@ -89,6 +90,8 @@ import {
  */
 @Module({
   imports: [
+    // The seeding runs in the default business (spec 18).
+    TenancyModule,
     MongooseModule.forFeature([
       { name: ProfessionalRecord.name, schema: ProfessionalSchema },
       { name: ServiceRecord.name, schema: ServiceSchema },

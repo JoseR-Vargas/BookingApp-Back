@@ -28,9 +28,10 @@ export function configureApp(app: NestExpressApplication): void {
 
   // Configuración CORS más permisiva para producción
   const corsOptions = {
-    origin: process.env.NODE_ENV === 'production'
-      ? ['https://booking-app-front-peach.vercel.app']
-      : true, // En desarrollo permite cualquier origen
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? ['https://booking-app-front-peach.vercel.app']
+        : true, // En desarrollo permite cualquier origen
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
     allowedHeaders: [

@@ -11,13 +11,16 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { BrandingModule } from './branding/branding.module';
+import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/booking'),
+    MongooseModule.forRoot(
+      process.env.MONGO_URI || 'mongodb://localhost:27017/booking',
+    ),
     BookingsModule,
     EmailModule,
     CatalogModule,
@@ -26,6 +29,7 @@ import { BrandingModule } from './branding/branding.module';
     AuthModule,
     AdminModule,
     BrandingModule,
+    TenancyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
