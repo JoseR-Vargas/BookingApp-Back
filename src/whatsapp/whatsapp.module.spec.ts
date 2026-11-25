@@ -12,6 +12,8 @@ import { BotHandler } from './bot/bot.handler';
 import { ConversationState } from './schemas/conversation-state.schema';
 import { ProcessedMessage } from './schemas/processed-message.schema';
 import { AdminBookingNotifier } from './admin-booking.notifier';
+import { BOOKING_NOTIFIER } from '../bookings/application/ports/booking-notifier.port';
+import { AdminWhatsappBookingNotifier } from '../bookings/infrastructure/notifications/booking.notifiers';
 import { WhatsappApiModule } from './whatsapp-api.module';
 import { WhatsappMessageHandler } from './whatsapp-message.handler';
 import { WhatsappModule } from './whatsapp.module';
@@ -78,13 +80,19 @@ describe('WhatsappModule wiring (no WHATSAPP_* / BUSINESS_TIMEZONE env)', () => 
     );
   });
 
-  it('injects the admin notifier into BookingsService', () => {
-    const bookings = moduleRef.get(BookingsService, { strict: false });
-    const notifier = moduleRef.get(AdminBookingNotifier, { strict: false });
+  it('wires the admin notifier into the booking notifications', () => {
+    // The notifier is behind the BOOKING_NOTIFIER port (spec 14); the composite
+    // holds the admin notifier among its notifications.
+    const notifier = moduleRef.get(BOOKING_NOTIFIER, { strict: false });
 
+    expect(notifier).toBeDefined();
+    const parts = (notifier as unknown as { notifiers: unknown[] }).notifiers;
+    expect(parts).toHaveLength(3);
     expect(
-      (bookings as unknown as { adminNotifier: unknown }).adminNotifier,
-    ).toBe(notifier);
+      (parts as unknown[]).some(
+        (part) => part instanceof AdminWhatsappBookingNotifier,
+      ),
+    ).toBe(true);
   });
 
   it('keeps BookingsModule free of WhatsappModule (no circular import)', () => {

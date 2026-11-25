@@ -8,13 +8,16 @@ import { Server } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? ['https://booking-app-front-peach.vercel.app']
-      : true,
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? ['https://booking-app-front-peach.vercel.app']
+        : true,
     credentials: true,
   },
 })
-export class BookingsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class BookingsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 

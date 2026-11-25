@@ -1,95 +1,111 @@
 import { INestApplication } from '@nestjs/common';
-import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
+import { Provider } from '@nestjs/common';
 import * as request from 'supertest';
-import { CatalogService } from '../catalog/catalog.service';
-import { EmailService } from '../email/email.service';
-import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
-import { BookingsController } from './bookings.controller';
-import { BookingsGateway } from './bookings.gateway';
-import { BookingsService } from './bookings.service';
-import { generateCancelToken, hashCancelToken } from './cancellation';
-import { Booking } from './schemas/booking.schema';
+import { BookingsController } from './infrastructure/http/bookings.controller';
+import { buildBookings, businessClock } from './bookings.testing';
+import { BlockAlreadyTaken } from './domain/booking.errors';
 
 /** Routing and status codes of the public cancel endpoints, over real HTTP. */
 describe('Booking cancel HTTP contract', () => {
   // Buenos Aires is UTC-3: a 10:00 booking starts at 13:00:00Z.
   const ZONE = 'America/Argentina/Buenos_Aires';
-  const token = generateCancelToken();
-  const booking = {
-    _id: '507f1f77bcf86cd799439011',
-    client: {
-      name: 'Juan Pérez',
-      email: 'juan@example.com',
-      phone: '1234567890',
-    },
-    services: [
-      {
-        id: 'servicio-basico',
-        name: 'Servicio Básico',
-        price: 1,
-        duration: 60,
-      },
-    ],
-    professional: { id: 'alex-garcia', name: 'Alex García' },
-    date: '2999-01-05',
-    time: '10:00',
-    status: 'confirmed',
-  };
+  const TOKEN = 'a'.repeat(43);
+  const ID = '507f1f77bcf86cd799439011';
 
   let app: INestApplication;
   let savedZone: string | undefined;
-  const bookingModel = {
-    findOne: jest.fn(),
-    findOneAndUpdate: jest.fn(),
-    findById: jest.fn(),
-  };
-  const exec = (value: unknown) => ({
-    exec: jest.fn().mockResolvedValue(value),
-  });
+  let bookings: ReturnType<typeof buildBookings>;
 
-  beforeAll(async () => {
-    savedZone = process.env.BUSINESS_TIMEZONE;
-    const moduleRef = await Test.createTestingModule({
+  const moduleWith = (overrides: Record<string, unknown>) =>
+    Test.createTestingModule({
       controllers: [BookingsController],
       providers: [
-        BookingsService,
-        { provide: getModelToken(Booking.name), useValue: bookingModel },
+        { provide: bookings.create.constructor, useValue: bookings.create },
+        { provide: bookings.list.constructor, useValue: bookings.list },
+        { provide: bookings.get.constructor, useValue: bookings.get },
+        { provide: bookings.update.constructor, useValue: bookings.update },
+        { provide: bookings.remove.constructor, useValue: bookings.remove },
         {
-          provide: BookingsGateway,
-          useValue: { notifyBookingCancelled: jest.fn() },
+          provide: bookings.getCancellation.constructor,
+          useValue: bookings.getCancellation,
         },
         {
-          provide: EmailService,
-          useValue: { sendCancellationConfirmation: jest.fn() },
+          provide: bookings.cancel.constructor,
+          useValue: bookings.cancel,
         },
-        { provide: CatalogService, useValue: {} },
-        { provide: AdminBookingNotifier, useValue: {} },
+        {
+          provide: bookings.checkSlot.constructor,
+          useValue: bookings.checkSlot,
+        },
+        {
+          provide: bookings.statistics.constructor,
+          useValue: bookings.statistics,
+        },
+        ...(Object.entries(overrides) as unknown as Provider[]),
       ],
-    }).compile();
+    });
+
+  const start = async (overrides: Record<string, unknown> = {}) => {
+    const moduleRef = await moduleWith(overrides).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     await app.init();
-  });
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.BUSINESS_TIMEZONE = ZONE;
-    bookingModel.findOne.mockReturnValue(exec(booking));
-    bookingModel.findOneAndUpdate.mockReturnValue(
-      exec({ ...booking, status: 'cancelled' }),
-    );
+    bookings = buildBookings({ clock: businessClock('2999-01-05', '09:00') });
   });
 
-  afterAll(async () => {
-    await app.close();
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  afterAll(() => {
     if (savedZone === undefined) delete process.env.BUSINESS_TIMEZONE;
     else process.env.BUSINESS_TIMEZONE = savedZone;
   });
 
+  const seed = async (overrides: Record<string, unknown> = {}) => {
+    await bookings.repository.create(
+      {
+        client: {
+          name: 'Juan Pérez',
+          email: 'juan@example.com',
+          phone: '1234567890',
+        },
+        services: [
+          {
+            id: 'servicio-basico',
+            name: 'Servicio Básico',
+            price: 1,
+            duration: 60,
+          },
+        ],
+        totalPrice: 1,
+        totalDuration: 60,
+        professional: { id: 'alex-garcia', name: 'Alex García' },
+        location: { id: 'principal', name: 'Principal' },
+        date: '2999-01-05',
+        time: '10:00',
+        slots: ['10:00', '10:30'],
+        notes: '',
+        status: 'confirmed',
+        ...overrides,
+      },
+      bookings.tokens.hash(TOKEN),
+      new BlockAlreadyTaken('Alex García', '2999-01-05', '10:00'),
+    );
+  };
+
   it('GET /api/bookings/cancel/:token answers the summary, not the :id route', async () => {
+    await seed();
+    await start();
+
     const response = await request(app.getHttpServer())
-      .get(`/api/bookings/cancel/${token}`)
+      .get(`/api/bookings/cancel/${TOKEN}`)
       .expect(200);
 
     expect(response.body).toEqual({
@@ -99,40 +115,43 @@ describe('Booking cancel HTTP contract', () => {
       date: '2999-01-05',
       time: '10:00',
     });
-    expect(bookingModel.findOne).toHaveBeenCalledWith({
-      cancelTokenHash: hashCancelToken(token),
-    });
-    expect(bookingModel.findById).not.toHaveBeenCalled();
   });
 
   it('never exposes client data', async () => {
+    await seed();
+    await start();
+
     const response = await request(app.getHttpServer())
-      .get(`/api/bookings/cancel/${token}`)
+      .get(`/api/bookings/cancel/${TOKEN}`)
       .expect(200);
 
     const text = JSON.stringify(response.body);
     expect(text).not.toContain('Juan');
     expect(text).not.toContain('juan@example.com');
     expect(text).not.toContain('1234567890');
-    expect(text).not.toContain(booking._id);
+    expect(text).not.toContain(ID);
   });
 
   it('POST /api/bookings/cancel/:token cancels and answers 200 (not 201)', async () => {
+    await seed();
+    await start();
+
     const response = await request(app.getHttpServer())
-      .post(`/api/bookings/cancel/${token}`)
+      .post(`/api/bookings/cancel/${TOKEN}`)
       .expect(200);
 
     expect(response.body.state).toBe('cancelled');
-    expect(bookingModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(bookings.notifier.cancelled_).toHaveLength(1);
   });
 
   it('answers 404 for an unknown or malformed token', async () => {
-    bookingModel.findOne.mockReturnValue(exec(null));
+    await start();
+
     await request(app.getHttpServer())
-      .get(`/api/bookings/cancel/${token}`)
+      .get(`/api/bookings/cancel/${TOKEN}`)
       .expect(404);
     await request(app.getHttpServer())
-      .post(`/api/bookings/cancel/${token}`)
+      .post(`/api/bookings/cancel/${TOKEN}`)
       .expect(404);
     await request(app.getHttpServer())
       .post('/api/bookings/cancel/not-a-token')
@@ -140,28 +159,32 @@ describe('Booking cancel HTTP contract', () => {
   });
 
   it('answers 409 on POST once the cutoff has passed, while GET reports closed', async () => {
-    bookingModel.findOne.mockReturnValue(
-      exec({ ...booking, date: '2000-01-01' }),
-    );
+    bookings = buildBookings({ clock: businessClock('2020-01-02', '09:00') });
+    await seed({ date: '2020-01-01' });
+    await start();
 
     await request(app.getHttpServer())
-      .post(`/api/bookings/cancel/${token}`)
+      .post(`/api/bookings/cancel/${TOKEN}`)
       .expect(409);
     const response = await request(app.getHttpServer())
-      .get(`/api/bookings/cancel/${token}`)
+      .get(`/api/bookings/cancel/${TOKEN}`)
       .expect(200);
     expect(response.body.state).toBe('closed');
-    expect(bookingModel.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(bookings.notifier.cancelled_).toHaveLength(0);
   });
 
-  it('answers 503 when BUSINESS_TIMEZONE is not configured', async () => {
-    delete process.env.BUSINESS_TIMEZONE;
+  it('answers 503 when the business timezone is unknown', async () => {
+    bookings = buildBookings({
+      clock: { now: () => ({ today: '2020-01-02', time: null }) },
+    });
+    await seed();
+    await start();
 
     await request(app.getHttpServer())
-      .get(`/api/bookings/cancel/${token}`)
+      .get(`/api/bookings/cancel/${TOKEN}`)
       .expect(503);
     await request(app.getHttpServer())
-      .post(`/api/bookings/cancel/${token}`)
+      .post(`/api/bookings/cancel/${TOKEN}`)
       .expect(503);
   });
 });

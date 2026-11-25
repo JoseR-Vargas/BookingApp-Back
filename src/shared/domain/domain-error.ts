@@ -6,7 +6,8 @@ export type DomainErrorKind =
   | 'validation'
   | 'not-found'
   | 'conflict'
-  | 'forbidden';
+  | 'forbidden'
+  | 'unavailable';
 
 /**
  * Base class of every error a business rule can raise. It extends `Error`

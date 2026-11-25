@@ -18,6 +18,7 @@ describe('SystemBusinessClock', () => {
     expect(new SystemBusinessClock(at('2026-10-19T15:00:00Z')).now()).toEqual({
       today: '2026-10-19',
       time: '12:00',
+      seconds: 0,
     });
   });
 
@@ -27,6 +28,7 @@ describe('SystemBusinessClock', () => {
     expect(new SystemBusinessClock(at('2026-10-20T01:05:00Z')).now()).toEqual({
       today: '2026-10-19',
       time: '22:05',
+      seconds: 0,
     });
   });
 
@@ -37,10 +39,18 @@ describe('SystemBusinessClock', () => {
       else process.env.BUSINESS_TIMEZONE = zone;
 
       expect(new SystemBusinessClock(at('2026-10-20T01:05:00Z')).now()).toEqual(
-        { today: '2026-10-20', time: null },
+        { today: '2026-10-20', time: null, seconds: 0 },
       );
     },
   );
+
+  it('adds the seconds into the minute, which the cancel cutoff needs', () => {
+    process.env.BUSINESS_TIMEZONE = 'America/Montevideo';
+
+    expect(
+      new SystemBusinessClock(at('2026-10-19T15:00:42Z')).now().seconds,
+    ).toBe(42);
+  });
 
   it('reads the timezone at every call, not at construction', () => {
     const clock = new SystemBusinessClock(at('2026-10-19T15:00:00Z'));

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { DomainError } from '../shared/domain/domain-error';
 import { Result } from '../shared/domain/result';
@@ -46,6 +47,7 @@ const TO_HTTP: Record<DomainError['kind'], (message: string) => HttpException> =
     'not-found': (message) => new NotFoundException(message),
     conflict: (message) => new ConflictException(message),
     forbidden: (message) => new ForbiddenException(message),
+    unavailable: (message) => new ServiceUnavailableException(message),
   };
 
 /**

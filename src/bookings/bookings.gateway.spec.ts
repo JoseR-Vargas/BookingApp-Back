@@ -23,7 +23,9 @@ describe('BookingsGateway', () => {
 
       gateway.handleConnection(mockClient);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Cliente conectado: test-client-123');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Cliente conectado: test-client-123',
+      );
       consoleSpy.mockRestore();
     });
   });
@@ -35,7 +37,9 @@ describe('BookingsGateway', () => {
 
       gateway.handleDisconnect(mockClient);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Cliente desconectado: test-client-123');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Cliente desconectado: test-client-123',
+      );
       consoleSpy.mockRestore();
     });
   });
@@ -82,7 +86,14 @@ describe('BookingsGateway', () => {
       const fullBooking = {
         _id: '507f1f77bcf86cd799439011',
         client: { name: 'Juan', email: 'juan@test.com', phone: '123' },
-        services: [{ id: 'corte-cabello', name: 'Corte comun', price: 450, duration: 45 }],
+        services: [
+          {
+            id: 'corte-cabello',
+            name: 'Corte comun',
+            price: 450,
+            duration: 45,
+          },
+        ],
         totalPrice: 450,
         totalDuration: 45,
         professional: { id: 'cesar-viloria', name: 'Cesar Viloria' },

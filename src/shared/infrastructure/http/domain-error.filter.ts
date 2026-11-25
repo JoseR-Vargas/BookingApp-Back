@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   HttpException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { DomainError, DomainErrorKind } from '../../domain/domain-error';
@@ -16,6 +17,7 @@ const TO_HTTP: Record<DomainErrorKind, (message: string) => HttpException> = {
   'not-found': (message) => new NotFoundException(message),
   conflict: (message) => new ConflictException(message),
   forbidden: (message) => new ForbiddenException(message),
+  unavailable: (message) => new ServiceUnavailableException(message),
 };
 
 /**

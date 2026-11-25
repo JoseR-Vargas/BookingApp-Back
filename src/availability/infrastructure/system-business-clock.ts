@@ -56,6 +56,7 @@ export class SystemBusinessClock implements BusinessClock {
     return {
       today: zoned?.date ?? instant.toISOString().slice(0, 10),
       time: zoned ? `${pad(zoned.hour)}:${pad(zoned.minute)}` : null,
+      seconds: instant.getUTCSeconds(),
     };
   }
 }

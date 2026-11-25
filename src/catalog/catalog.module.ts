@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleImpactService } from '../admin/schedule-impact';
-import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
 import { CLOCK } from '../shared/application/clock.port';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
+import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
 import { LEGACY_SCHEDULE_READER } from './application/ports/legacy-schedule.reader';
 import { LOCATION_READER } from './application/ports/location.reader';
 import { LOCATION_WRITER } from './application/ports/location.writer';
@@ -46,7 +46,9 @@ import { SavePublicAvailabilityUseCase } from './application/use-cases/settings/
 import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogController } from './catalog.controller';
 import { CatalogService } from './catalog.service';
-import { MongoBookingActivityAdapter } from './infrastructure/bookings/mongo-booking-activity.adapter';
+import { BOOKING_ACTIVITY_READER } from '../bookings/application/ports/booking-activity.reader';
+import { MongoBookingActivityReader } from '../bookings/infrastructure/persistence/mongo/mongo-booking-activity.reader';
+import { BookingActivityAdapter } from '../bookings/infrastructure/read-model/booking-activity.adapter';
 import { CatalogPhotoController } from './infrastructure/http/catalog-photo.controller';
 import { LocationsAdminController } from './infrastructure/http/locations-admin.controller';
 import { ProfessionalPhotosAdminController } from './infrastructure/http/professional-photos-admin.controller';
@@ -131,7 +133,8 @@ import {
       useExisting: MongoBusinessSettingsRepository,
     },
     // Temporary port: answered from the bookings collection until `bookings` migrates (spec 13).
-    { provide: BOOKING_ACTIVITY, useClass: MongoBookingActivityAdapter },
+    { provide: BOOKING_ACTIVITY_READER, useClass: MongoBookingActivityReader },
+    { provide: BOOKING_ACTIVITY, useClass: BookingActivityAdapter },
     { provide: CLOCK, useClass: SystemClock },
     ListProfessionalsUseCase,
     CreateProfessionalUseCase,

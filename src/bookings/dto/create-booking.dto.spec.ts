@@ -3,7 +3,11 @@ import { CreateBookingDto } from './create-booking.dto';
 describe('CreateBookingDto', () => {
   it('debería crear una instancia con todos los campos', () => {
     const dto = new CreateBookingDto();
-    dto.client = { name: 'Juan Pérez', email: 'juan@example.com', phone: '1234567890' };
+    dto.client = {
+      name: 'Juan Pérez',
+      email: 'juan@example.com',
+      phone: '1234567890',
+    };
     dto.services = [{ id: 'servicio-basico' }];
     dto.professional = { id: 'cesar-viloria', name: 'Cesar Viloria' };
     dto.date = '2026-03-25';
@@ -35,7 +39,12 @@ describe('CreateBookingDto', () => {
 
   it('debería permitir client.id como campo opcional', () => {
     const dto = new CreateBookingDto();
-    dto.client = { name: 'Juan', id: 'DNI-123456', email: 'juan@test.com', phone: '123' };
+    dto.client = {
+      name: 'Juan',
+      id: 'DNI-123456',
+      email: 'juan@test.com',
+      phone: '123',
+    };
     dto.services = [{ id: 'servicio-basico' }];
     dto.professional = { id: 'cesar-viloria', name: 'Cesar Viloria' };
     dto.date = '2026-03-25';
