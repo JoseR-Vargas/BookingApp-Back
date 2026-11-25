@@ -5,14 +5,19 @@
 import { Provider } from '@nestjs/common';
 import { CLOCK, Clock } from '../../shared/application/clock.port';
 import { BOOKING_ACTIVITY } from '../application/ports/booking-activity.port';
-import { LOCATION_DIRECTORY } from '../application/ports/location-directory.port';
+import { LEGACY_SCHEDULE_READER } from '../application/ports/legacy-schedule.reader';
+import { LOCATION_READER } from '../application/ports/location.reader';
+import { LOCATION_WRITER } from '../application/ports/location.writer';
+import { PUBLIC_AVAILABILITY_READER } from '../application/ports/public-availability.reader';
+import { PUBLIC_AVAILABILITY_WRITER } from '../application/ports/public-availability.writer';
 import { PROFESSIONAL_PHOTO_STORE } from '../application/ports/professional-photo.store';
 import { PROFESSIONAL_READER } from '../application/ports/professional.reader';
 import { PROFESSIONAL_WRITER } from '../application/ports/professional.writer';
 import { SERVICE_READER } from '../application/ports/service.reader';
 import { SERVICE_WRITER } from '../application/ports/service.writer';
 import { InMemoryBookingActivity } from './persistence/in-memory/in-memory-booking-activity';
-import { InMemoryLocationDirectory } from './persistence/in-memory/in-memory-location-directory';
+import { InMemoryBusinessSettings } from './persistence/in-memory/in-memory-business-settings';
+import { InMemoryLocationRepository } from './persistence/in-memory/in-memory-location.repository';
 import { InMemoryProfessionalRepository } from './persistence/in-memory/in-memory-professional.repository';
 import { InMemoryServiceRepository } from './persistence/in-memory/in-memory-service.repository';
 import { CreateProfessionalUseCase } from '../application/use-cases/professionals/create-professional.use-case';
@@ -34,6 +39,15 @@ import { DeleteServicePermanentlyUseCase } from '../application/use-cases/servic
 import { FindActiveServiceUseCase } from '../application/use-cases/services/find-active-service.use-case';
 import { ListServicesUseCase } from '../application/use-cases/services/list-services.use-case';
 import { UpdateServiceUseCase } from '../application/use-cases/services/update-service.use-case';
+import { CreateLocationUseCase } from '../application/use-cases/locations/create-location.use-case';
+import { EnsurePrincipalLocationUseCase } from '../application/use-cases/locations/ensure-principal-location.use-case';
+import { GetLocationUseCase } from '../application/use-cases/locations/get-location.use-case';
+import { ListLocationsUseCase } from '../application/use-cases/locations/list-locations.use-case';
+import { ResolveDefaultLocationUseCase } from '../application/use-cases/locations/resolve-default-location.use-case';
+import { SaveLocationScheduleUseCase } from '../application/use-cases/locations/save-location-schedule.use-case';
+import { UpdateLocationUseCase } from '../application/use-cases/locations/update-location.use-case';
+import { GetPublicAvailabilityUseCase } from '../application/use-cases/settings/get-public-availability.use-case';
+import { SavePublicAvailabilityUseCase } from '../application/use-cases/settings/save-public-availability.use-case';
 
 /** A clock that always answers the same instant. */
 export const fixedClock = (instant: Date): Clock => ({
@@ -47,7 +61,14 @@ export function inMemoryCatalog(
   const professionals = new InMemoryProfessionalRepository();
   const services = new InMemoryServiceRepository();
   const activity = new InMemoryBookingActivity();
-  const locations = new InMemoryLocationDirectory();
+  const settings = new InMemoryBusinessSettings();
+  const locations = new InMemoryLocationRepository(settings);
+  const ensurePrincipalLocation = new EnsurePrincipalLocationUseCase(
+    locations,
+    locations,
+    settings,
+    clock,
+  );
 
   const updateProfessional = new UpdateProfessionalUseCase(
     professionals,
@@ -59,7 +80,24 @@ export function inMemoryCatalog(
     services,
     activity,
     locations,
+    settings,
     useCases: {
+      listLocations: new ListLocationsUseCase(locations),
+      getLocation: new GetLocationUseCase(locations),
+      resolveDefaultLocation: new ResolveDefaultLocationUseCase(locations),
+      ensurePrincipalLocation,
+      createLocation: new CreateLocationUseCase(locations, clock),
+      updateLocation: new UpdateLocationUseCase(locations, locations),
+      saveLocationSchedule: new SaveLocationScheduleUseCase(
+        locations,
+        locations,
+        ensurePrincipalLocation,
+      ),
+      getPublicAvailability: new GetPublicAvailabilityUseCase(settings),
+      savePublicAvailability: new SavePublicAvailabilityUseCase(
+        services,
+        settings,
+      ),
       listProfessionals: new ListProfessionalsUseCase(professionals),
       createProfessional: new CreateProfessionalUseCase(
         professionals,
@@ -136,7 +174,11 @@ export function inMemoryCatalogProviders(
     { provide: SERVICE_READER, useValue: kit.services },
     { provide: SERVICE_WRITER, useValue: kit.services },
     { provide: BOOKING_ACTIVITY, useValue: kit.activity },
-    { provide: LOCATION_DIRECTORY, useValue: kit.locations },
+    { provide: LOCATION_READER, useValue: kit.locations },
+    { provide: LOCATION_WRITER, useValue: kit.locations },
+    { provide: LEGACY_SCHEDULE_READER, useValue: kit.settings },
+    { provide: PUBLIC_AVAILABILITY_READER, useValue: kit.settings },
+    { provide: PUBLIC_AVAILABILITY_WRITER, useValue: kit.settings },
     { provide: CLOCK, useValue: clock },
     ListProfessionalsUseCase,
     CreateProfessionalUseCase,
@@ -157,5 +199,14 @@ export function inMemoryCatalogProviders(
     FindActiveServiceUseCase,
     ResolveServiceSelectionUseCase,
     GetPublicCatalogUseCase,
+    ListLocationsUseCase,
+    GetLocationUseCase,
+    ResolveDefaultLocationUseCase,
+    EnsurePrincipalLocationUseCase,
+    CreateLocationUseCase,
+    UpdateLocationUseCase,
+    SaveLocationScheduleUseCase,
+    GetPublicAvailabilityUseCase,
+    SavePublicAvailabilityUseCase,
   ];
 }

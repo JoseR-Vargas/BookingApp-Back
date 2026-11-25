@@ -1,5 +1,11 @@
-import type { Professional as PublicProfessional } from '../../catalog.config';
-import type { Service as PublicService } from '../../catalog.config';
+import type {
+  AdminLocation,
+  Professional as PublicProfessional,
+  PublicLocation,
+  Service as PublicService,
+} from '../../catalog.config';
+import { Location } from '../../domain/location';
+import { scheduleOf } from '../../domain/location.rules';
 import { Professional } from '../../domain/professional';
 import { Service } from '../../domain/service';
 import { ProfessionalView } from '../../application/use-cases/professionals/professional-view';
@@ -67,4 +73,16 @@ export const toPublicService = (service: Service): PublicService => ({
 export const toAdminService = (service: Service): AdminService => ({
   ...toPublicService(service),
   active: service.active,
+});
+
+export const toPublicLocation = (location: Location): PublicLocation => ({
+  id: location.id,
+  name: location.name,
+  address: location.address,
+  schedule: scheduleOf(location),
+});
+
+export const toAdminLocation = (location: Location): AdminLocation => ({
+  ...toPublicLocation(location),
+  active: location.active,
 });

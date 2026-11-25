@@ -7,7 +7,8 @@ repository.
 
 ## Model
 
-`locations` collection (`src/catalog/schemas/location.schema.ts`):
+`locations` collection (entity `src/catalog/infrastructure/persistence/mongo/location.entity.ts`,
+domain model `src/catalog/domain/location.ts`):
 
 | Field                  | Meaning                                                              |
 | ---------------------- | -------------------------------------------------------------------- |
@@ -28,13 +29,31 @@ repository.
 
 ## Migration
 
-`CatalogService.onModuleInit` calls `ensurePrincipalLocation` (`src/catalog/locations.ts`) after
-seeding the settings. If `locations` is empty it inserts the location `principal` (name
-"Principal", empty address) with a **copy** of the schedule stored in `business_settings`
-(or the `SCHEDULE` seed when none is stored). It is idempotent (an atomic insert on the id, and
-nothing happens when any location already exists) and never deletes or edits `business_settings`.
-Between a deploy and the first start, reads fall back to a virtual "principal" built from the same
-legacy schedule, so nothing fails.
+`CatalogService.onModuleInit` runs the seeder, whose last step is `EnsurePrincipalLocationUseCase`
+(`src/catalog/application/use-cases/locations/`), after seeding the settings. If `locations` is
+empty it stores the location `principal` (name "Principal", empty address) with a **copy** of the
+schedule stored in `business_settings` (read through the `LegacyScheduleReader` port, or the
+`SCHEDULE` seed when none is stored). The domain decides what to copy (`principalLocation`); the
+`LocationWriter` adapter stores it atomically by id (`insertIfAbsent`). It is idempotent (nothing
+happens when any location already exists, and concurrent instances create it once) and never
+deletes or edits `business_settings`. Between a deploy and the first start, `LocationReader.list()`
+answers a virtual "principal" built from the same legacy schedule, so nothing fails.
+
+## Layers
+
+| Layer | Where | What |
+| --- | --- | --- |
+| Shared core | `src/shared/domain/schedule/` | `WeeklySchedule`, `DaySchedule`, `DayOfWeek` and the pure rules (`offeredStarts`, `buildDaySlots`, `slotsRequired`, `toMinutes`, `dayOfWeekFromIsoDate`) that `catalog` and `availability` both import (`availability.calculator.ts` re-exports them) |
+| Domain | `src/catalog/domain/` | `location.ts`, `location.rules.ts` (name/address, default = oldest active, last active), `schedule-input.rules.ts` (week, start interval, `starts`), `public-availability.rules.ts`, `location.errors.ts` |
+| Ports | `src/catalog/application/ports/` | `LocationReader`, `LocationWriter`, `PublicAvailabilityReader`, `PublicAvailabilityWriter`, `LegacyScheduleReader` (+ contract suites) |
+| Use cases | `src/catalog/application/use-cases/locations/`, `settings/` | list, get, resolve default, create, update, save schedule, ensure principal, get/save public availability |
+| Adapters | `src/catalog/infrastructure/persistence/{mongo,in-memory}/` | repositories of `locations` and `business_settings` that pass the same contract suites |
+| HTTP | `src/catalog/infrastructure/http/` | `LocationsAdminController`, `ScheduleAdminController`, `PublicAvailabilityAdminController` and their input parsers |
+
+`CatalogService` and `CatalogAdminService` are temporary facades over the use cases for `bookings`,
+`availability`, `admin` and the WhatsApp bot: they translate a business failure into the
+exception those callers expect (`LocationNotFoundError` from `src/catalog/locations.ts`, Nest
+`400`/`404`). The facades are deleted as each consumer migrates.
 
 ## Default location
 

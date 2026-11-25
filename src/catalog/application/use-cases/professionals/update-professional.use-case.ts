@@ -6,10 +6,8 @@ import {
   ensureActiveLocations,
   toProfessionalPatch,
 } from '../../../domain/professional.rules';
-import {
-  LOCATION_DIRECTORY,
-  LocationDirectory,
-} from '../../ports/location-directory.port';
+import { activeLocationIds } from '../../../domain/location.rules';
+import { LOCATION_READER, LocationReader } from '../../ports/location.reader';
 import {
   PROFESSIONAL_WRITER,
   ProfessionalWriter,
@@ -27,7 +25,7 @@ export interface UpdateProfessionalCommand {
 export class UpdateProfessionalUseCase {
   constructor(
     @Inject(PROFESSIONAL_WRITER) private readonly writer: ProfessionalWriter,
-    @Inject(LOCATION_DIRECTORY) private readonly locations: LocationDirectory,
+    @Inject(LOCATION_READER) private readonly locations: LocationReader,
   ) {}
 
   async execute(
@@ -37,7 +35,7 @@ export class UpdateProfessionalUseCase {
     if (command.patch.locations) {
       const checked = ensureActiveLocations(
         command.patch.locations,
-        await this.locations.activeIds(),
+        activeLocationIds(await this.locations.list()),
       );
       if (!checked.ok) return checked;
       locationIds = checked.value;

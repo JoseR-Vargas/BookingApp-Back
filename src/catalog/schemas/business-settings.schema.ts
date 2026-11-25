@@ -1,38 +1,6 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import {
-  DayOfWeek,
-  DaySchedule,
-  PublicAvailabilitySettings,
-} from '../catalog.config';
-
-/** Key of the single document that holds the weekly schedule. */
-export const SCHEDULE_KEY = 'schedule';
-
-/** Singleton settings document of the `business_settings` collection. */
-@Schema({ collection: 'business_settings', versionKey: false })
-export class BusinessSettingsRecord {
-  @Prop({ type: String, required: true, default: SCHEDULE_KEY })
-  key: string;
-
-  /** Keyed '0' (Sunday) to '6' (Saturday). */
-  @Prop({ type: Object, required: true })
-  weekly: Record<DayOfWeek, DaySchedule>;
-
-  /** Fixed at 30; the admin cannot change it. */
-  @Prop({ type: Number, default: 30 })
-  slotIntervalMinutes: number;
-
-  /** Minutes between the start times offered to the public. A multiple of 30. */
-  @Prop({ type: Number, default: 30 })
-  startIntervalMinutes: number;
-
-  /** Public availability page settings; absent on documents stored before it existed. */
-  @Prop({ type: Object })
-  publicAvailability?: PublicAvailabilitySettings;
-}
-
-export const BusinessSettingsSchema = SchemaFactory.createForClass(
-  BusinessSettingsRecord,
-);
-
-BusinessSettingsSchema.index({ key: 1 }, { unique: true });
+/**
+ * The settings entity lives with its MongoDB adapter. This path stays for the
+ * modules that have not migrated yet (they still read the schema).
+ * @deprecated Import from `infrastructure/persistence/mongo/business-settings.entity`.
+ */
+export * from '../infrastructure/persistence/mongo/business-settings.entity';

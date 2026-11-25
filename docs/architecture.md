@@ -22,7 +22,8 @@ Imports go inward only: `infrastructure -> application -> domain`.
 | `application`    | `domain`, `shared/domain`; from Nest only `Injectable` and `Inject` | `mongoose`, `@nestjs/mongoose`, `@nestjs/platform-express`, `socket.io`, `nodemailer`, `infrastructure` |
 | `infrastructure` | anything inward, plus the SDKs it adapts                            | other modules' `infrastructure`                                                                         |
 
-`src/architecture.spec.ts` enforces this for `src/shared` and for every module listed in
+`src/architecture.spec.ts` enforces this for `src/shared` (which includes the pure schedule core
+`src/shared/domain/schedule`, also `throw`-free) and for every module listed in
 `MIGRATED_MODULES`. A module joins the list in the spec that migrates it. Modules in
 `RESULT_MODULES` (`src/architecture/result-modules.ts`) must also be `throw`-free in `domain/` and
 `application/use-cases/` (see "Errors as values").
@@ -105,11 +106,13 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   without touching the domain or the use cases. Spec 10 made its rules and use cases return
   `Result` (listed in `RESULT_MODULES`); the HTTP answers did not change.
 
-- `catalog` (spec 11, professionals, services, service selection and photos): same layout and
-  `Result` rules; `locations`, schedules and public-availability settings stay in the old style
-  until spec 12. `CatalogService` and `CatalogAdminService` are temporary facades (`@deprecated`)
-  that wrap the use cases for `bookings`, `availability`, `admin` and the WhatsApp bot, and are
-  deleted as each consumer migrates.
+- `catalog` (spec 11: professionals, services, service selection and photos; spec 12: locations,
+  schedules, public-availability settings and the migration to "Principal"): same layout and
+  `Result` rules. The schedule model and its pure rules live in `src/shared/domain/schedule/`, the
+  shared core that `catalog` and `availability` both import (so neither depends on the other).
+  `CatalogService` and `CatalogAdminService` are temporary facades (`@deprecated`) that wrap the
+  use cases for `bookings`, `availability`, `admin` and the WhatsApp bot, and are deleted as each
+  consumer migrates. See [locations.md](./locations.md).
 
 Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog']`.
 
@@ -118,7 +121,11 @@ Temporary ports (they read data owned by a module that has not migrated yet):
 | Port | Adapter today | Replaced by |
 | --- | --- | --- |
 | `BookingActivity` | reads the bookings collection | spec 13 (`bookings`) |
-| `LocationDirectory` | reads the locations collection | spec 12 (`locations`) |
+
+Other temporary crossings: the catalog's schedule controller counts the bookings a schedule leaves
+out of hours with `ScheduleImpactService` (`src/admin/schedule-impact.ts`), which stays in `admin`
+until spec 14; and `src/catalog/locations.ts` keeps `LocationNotFoundError` for `bookings` and
+`availability` until spec 13.
 
 Others (`availability`, `bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
 previous style and are migrated one per spec. Do not extend the previous style in new code.

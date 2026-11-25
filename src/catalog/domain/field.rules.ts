@@ -50,11 +50,15 @@ export const integerBetween =
       ? ok(value)
       : fail(message);
 
+/** A JSON object: not null, not an array. */
+export const isBody = (value: unknown): value is Body =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
 export function asBody(body: unknown): FieldResult<Body> {
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+  if (!isBody(body)) {
     return fail('body must be a JSON object');
   }
-  return ok(body as Body);
+  return ok(body);
 }
 
 /**
