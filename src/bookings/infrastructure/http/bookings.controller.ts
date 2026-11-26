@@ -22,6 +22,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { DomainError } from '../../../shared/domain/domain-error';
 import { Result } from '../../../shared/domain/result';
 import { CancelBookingByTokenUseCase } from '../../application/use-cases/cancel-booking-by-token.use-case';
@@ -151,6 +152,7 @@ export class BookingsController {
   }
 
   @UseGuards(AdminKeyGuard)
+  @Roles('staff', 'owner')
   @Patch(':id')
   async update(@Param('id') id: string, @Body() body: unknown) {
     const booking = await unwrap(() =>
@@ -160,6 +162,7 @@ export class BookingsController {
   }
 
   @UseGuards(AdminKeyGuard)
+  @Roles('staff', 'owner')
   @Delete(':id')
   async remove(@Param('id') id: string) {
     const booking = await this.deleteBooking.execute(id).then((result) => {

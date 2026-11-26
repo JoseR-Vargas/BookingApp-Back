@@ -4,6 +4,7 @@ import {
   currentBusinessDate,
 } from '../../../admin/schedule-impact';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { WeeklySchedule } from '../../../shared/domain/schedule/schedule';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { ResolveDefaultLocationUseCase } from '../../application/use-cases/locations/resolve-default-location.use-case';
@@ -23,6 +24,7 @@ interface ScheduleSaved {
  */
 @Controller('admin')
 @UseGuards(AdminKeyGuard)
+@Roles('owner')
 export class ScheduleAdminController {
   constructor(
     private readonly saveLocationSchedule: SaveLocationScheduleUseCase,

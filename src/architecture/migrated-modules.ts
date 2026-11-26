@@ -7,4 +7,5 @@ export const MIGRATED_MODULES: readonly string[] = [
   'branding',
   'catalog',
   'availability',
+  'auth',
 ];

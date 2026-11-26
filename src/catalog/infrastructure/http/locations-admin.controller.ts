@@ -1,5 +1,6 @@
 import { Body, Controller, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { AdminLocation } from '../../catalog.config';
 import { CreateLocationUseCase } from '../../application/use-cases/locations/create-location.use-case';
@@ -13,6 +14,7 @@ import {
 /** Location endpoints of the admin panel, all behind the admin key. */
 @Controller('admin/locations')
 @UseGuards(AdminKeyGuard)
+@Roles('owner')
 export class LocationsAdminController {
   constructor(
     private readonly createLocation: CreateLocationUseCase,

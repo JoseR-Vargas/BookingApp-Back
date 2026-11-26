@@ -123,7 +123,12 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   `whatsapp`: "today" and the current time come from `BusinessClock` (`SystemBusinessClock`, which
   reads `BUSINESS_TIMEZONE`).
 
-Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability']`.
+- `auth` (spec 20: admin accounts, sessions and roles): domain rules and errors, ports for
+  users, sessions, password hashing and session tokens, one use case per action, in-memory and
+  MongoDB adapters that pass the same contract suites, and the guard that accepts the session
+  cookie or the legacy key. See [admin-accounts.md](./admin-accounts.md).
+
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth']`.
 
 Temporary ports (they read data owned by a module that has not migrated yet):
 

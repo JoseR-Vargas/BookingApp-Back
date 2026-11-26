@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { currentBusinessDate } from '../../../admin/schedule-impact';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { CreateServiceUseCase } from '../../application/use-cases/services/create-service.use-case';
 import { DeactivateServiceUseCase } from '../../application/use-cases/services/deactivate-service.use-case';
@@ -23,6 +24,7 @@ import {
 /** Service endpoints of the admin panel, all behind the admin key. */
 @Controller('admin/services')
 @UseGuards(AdminKeyGuard)
+@Roles('owner')
 export class ServicesAdminController {
   constructor(
     private readonly createService: CreateServiceUseCase,

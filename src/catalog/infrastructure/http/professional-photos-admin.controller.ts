@@ -7,6 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { RemoveProfessionalPhotoUseCase } from '../../application/use-cases/professionals/remove-professional-photo.use-case';
 import { SetProfessionalPhotoUseCase } from '../../application/use-cases/professionals/set-professional-photo.use-case';
@@ -16,6 +17,7 @@ import { parseProfessionalPhotoInput } from './professional.input';
 /** Photo endpoints of a professional in the admin panel, behind the admin key. */
 @Controller('admin/professionals')
 @UseGuards(AdminKeyGuard)
+@Roles('owner')
 export class ProfessionalPhotosAdminController {
   constructor(
     private readonly setProfessionalPhoto: SetProfessionalPhotoUseCase,

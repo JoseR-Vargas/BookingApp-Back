@@ -9,12 +9,18 @@ each repository, so a forgotten filter cannot leak data.
 - `tenants` collection: `slug` (unique), `name`, `status` (`active` or
   `suspended`), `isDefault`, `createdAt`. It has no `tenantId`.
 - Scoped collections: `professionals`, `services`, `locations`,
-  `business_settings`, `branding`, `bookings`. Each declares
+  `business_settings`, `branding`, `bookings`, `admin_users`, `admin_sessions`
+  (spec 20, see [admin-accounts.md](./admin-accounts.md)). Each declares
   `tenantId: ObjectId` and applies `tenantScopePlugin`.
 - Unique indexes start with `tenantId` (`{tenantId, id}`, `{tenantId, key}`,
   and the booking slot index `{tenantId, professional.id, date, slots}`), so
   two businesses may share an id such as `alex-garcia`. The cancel-token index
   stays global.
+- `admin_sessions` also has a TTL index on `expiresAt` (it cannot start with
+  `tenantId`).
+- The shared admin key can be turned off per business with
+  `ADMIN_KEY_DISABLED_TENANTS` (slugs, comma separated) once it has an owner
+  (`npm run admin:create`).
 - The WhatsApp collections (`conversation_states`, `processed_messages`) are
   not scoped: the bot answers in the default business.
 

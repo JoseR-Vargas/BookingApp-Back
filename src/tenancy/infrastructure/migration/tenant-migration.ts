@@ -3,7 +3,7 @@
 // The one-off migration of spec 18, idempotent and with a mode of test:
 //
 //   1. it creates the default business ("principal") when there is none;
-//   2. it fills `tenantId` on the documents of the six shared collections
+//   2. it fills `tenantId` on the documents of the shared collections
 //      that do not have it;
 //   3. it drops the old unique indexes and creates the new ones, which start
 //      with `tenantId`.
@@ -29,6 +29,8 @@ export const SCOPED_COLLECTIONS = [
   'business_settings',
   'branding',
   'bookings',
+  'admin_users',
+  'admin_sessions',
 ] as const;
 
 /** The name of the unique index that keeps a confirmed booking alone. */
@@ -44,6 +46,7 @@ interface IndexPlan {
     options?: {
       unique?: boolean;
       name?: string;
+      expireAfterSeconds?: number;
       partialFilterExpression?: Record<string, unknown>;
     };
   };
@@ -96,6 +99,29 @@ export const INDEX_PLANS: readonly IndexPlan[] = [
   {
     collection: 'bookings',
     create: { key: { tenantId: 1, date: 1 } },
+  },
+  // Admin accounts and sessions (spec 20).
+  {
+    collection: 'admin_users',
+    create: { key: { tenantId: 1, email: 1 }, options: { unique: true } },
+  },
+  {
+    collection: 'admin_users',
+    create: { key: { tenantId: 1, role: 1 } },
+  },
+  {
+    collection: 'admin_sessions',
+    create: { key: { tenantId: 1, tokenHash: 1 }, options: { unique: true } },
+  },
+  {
+    collection: 'admin_sessions',
+    create: { key: { tenantId: 1, userId: 1 } },
+  },
+  {
+    // TTL: MongoDB removes a session when `expiresAt` passes. A TTL index
+    // cannot be compound, so it is the one index without `tenantId`.
+    collection: 'admin_sessions',
+    create: { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
   },
 ];
 
@@ -221,7 +247,7 @@ export class TenantMigration {
     };
   }
 
-  /** The documents of the six collections that do not have a business yet. */
+  /** The documents of the collections that do not have a business yet. */
   private async fillTenants(
     tenantId: string,
     dryRun: boolean,
@@ -258,7 +284,7 @@ export class TenantMigration {
         created: [],
       };
       const collection = this.connection.collection(plan.collection);
-      const indexes = await collection.indexes();
+      const indexes = await existingIndexes(collection);
 
       if (plan.drop) {
         const old = indexes.find((index) => sameKey(index.key, plan.drop!));
@@ -295,6 +321,21 @@ export class TenantMigration {
       collection,
       ...entry,
     }));
+  }
+}
+
+/** NamespaceNotFound: the collection has not been created yet. */
+const NAMESPACE_NOT_FOUND = 26;
+
+/** The indexes of a collection; none while the collection does not exist yet. */
+async function existingIndexes(
+  collection: ReturnType<Connection['collection']>,
+): Promise<Awaited<ReturnType<typeof collection.indexes>>> {
+  try {
+    return await collection.indexes();
+  } catch (error) {
+    if ((error as { code?: number }).code === NAMESPACE_NOT_FOUND) return [];
+    throw error;
   }
 }
 
