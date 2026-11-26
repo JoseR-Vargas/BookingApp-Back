@@ -55,7 +55,9 @@ describe('BookingSchema', () => {
     expect(servicesPath.instance).toBe('Array');
     expect(servicesPath.isRequired).toBe(true);
     const line = servicesPath.schema;
-    expect(['id', 'name', 'price', 'duration'].map((k) => line.path(k).isRequired)).toEqual([true, true, true, true]);
+    expect(
+      ['id', 'name', 'price', 'duration'].map((k) => line.path(k).isRequired),
+    ).toEqual([true, true, true, true]);
     expect(line.path('_id')).toBeUndefined();
   });
 
@@ -87,13 +89,16 @@ describe('BookingSchema', () => {
   });
 
   it('debería declarar el índice único parcial por profesional, fecha y slot', () => {
-    const index = BookingSchema.indexes().find(
-      ([fields]) => 'slots' in fields,
-    );
+    const index = BookingSchema.indexes().find(([fields]) => 'slots' in fields);
 
     expect(index).toBeDefined();
     const [fields, options] = index!;
-    expect(fields).toEqual({ 'professional.id': 1, date: 1, slots: 1 });
+    expect(fields).toEqual({
+      tenantId: 1,
+      'professional.id': 1,
+      date: 1,
+      slots: 1,
+    });
     expect(options).toEqual(
       expect.objectContaining({
         unique: true,

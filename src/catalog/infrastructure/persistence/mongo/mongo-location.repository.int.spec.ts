@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import { describeLocationRepositoryContract } from '../../../application/ports/location-repository.contract';
 import {
@@ -62,8 +63,8 @@ describe('MongoLocationRepository', () => {
           if (fields[key] === undefined) delete fields[key];
         }
         await collection.updateOne(
-          { id },
-          { $setOnInsert: fields },
+          { tenantId: TEST_TENANT_ID, id },
+          { $setOnInsert: { ...fields, tenantId: TEST_TENANT_ID } },
           { upsert: true },
         );
       },
@@ -71,8 +72,8 @@ describe('MongoLocationRepository', () => {
         await connection
           .collection('business_settings')
           .updateOne(
-            { key: SCHEDULE_KEY },
-            { $setOnInsert: schedule },
+            { tenantId: TEST_TENANT_ID, key: SCHEDULE_KEY },
+            { $setOnInsert: { ...schedule, tenantId: TEST_TENANT_ID } },
             { upsert: true },
           );
       },

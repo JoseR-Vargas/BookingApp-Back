@@ -4,7 +4,10 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -29,6 +32,11 @@ const nestBody = {
   'not-found': new NotFoundException('Mensaje del dominio').getResponse(),
   conflict: new ConflictException('Mensaje del dominio').getResponse(),
   forbidden: new ForbiddenException('Mensaje del dominio').getResponse(),
+  unavailable: new ServiceUnavailableException(
+    'Mensaje del dominio',
+  ).getResponse(),
+  tenant: new InternalServerErrorException('Mensaje del dominio').getResponse(),
+  unauthorized: new UnauthorizedException('Mensaje del dominio').getResponse(),
 };
 
 const STATUS: Record<DomainErrorKind, number> = {
@@ -36,6 +44,9 @@ const STATUS: Record<DomainErrorKind, number> = {
   'not-found': 404,
   conflict: 409,
   forbidden: 403,
+  unavailable: 503,
+  tenant: 500,
+  unauthorized: 401,
 };
 
 describe('DomainErrorFilter (registered by configureApp)', () => {

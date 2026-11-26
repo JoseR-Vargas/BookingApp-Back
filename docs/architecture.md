@@ -111,23 +111,63 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   `Result` rules. The schedule model and its pure rules live in `src/shared/domain/schedule/`, the
   shared core that `catalog` and `availability` both import (so neither depends on the other).
   `CatalogService` and `CatalogAdminService` are temporary facades (`@deprecated`) that wrap the
-  use cases for `bookings`, `availability`, `admin` and the WhatsApp bot, and are deleted as each
+  use cases for `bookings`, `availability` and `admin`, and are deleted as each
   consumer migrates. See [locations.md](./locations.md).
 
-Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog']`.
+- `availability` (spec 13: availability of a day and the public view): domain rules (`occupancy`,
+  `day-availability`, `public-view`) and errors, ports `OccupiedSlotsReader`, `CatalogLookup` and
+  `BusinessClock`, use cases `GetAvailability` and `GetPublicAvailability`, and controllers with the
+  same routes and answers as before. `AvailabilityService` is a temporary facade (`@deprecated`)
+  that wraps `GetAvailability` for the legacy callers, and `availability.calculator.ts` only
+  re-exports the rules for `bookings` and `admin`. "Today" and the current time come from
+  `BusinessClock` (`SystemBusinessClock`, which reads `BUSINESS_TIMEZONE`).
+
+- `auth` (spec 20: admin accounts, sessions and roles): domain rules and errors, ports for
+  users, sessions, password hashing and session tokens, one use case per action, in-memory and
+  MongoDB adapters that pass the same contract suites, and the guard that accepts the session
+  cookie or the legacy key. See [admin-accounts.md](./admin-accounts.md).
+
+- `billing` (spec 23: plans, subscription state machine, plan limits, payment gateway port with a fake adapter, signed idempotent webhook): see [billing.md](./billing.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
+
+- `reminders` (spec 24: the reminder of a booking before its appointment): domain rules (which
+  bookings are due, which window, whether it was already sent, which channels apply and the
+  markers of the template), ports `MessageSender` (the mailer of `email`), `BusinessTime` (the
+  clock of the business, `BUSINESS_TIMEZONE`)
+  and `ReminderPlan` (the limits of the plan of spec 23), the use cases `SendDueReminders` and
+  `SendReminder` (the log of what was sent lives in the booking, so the idempotency does not
+  depend on another service) and the scheduler that runs every X minutes
+  (`REMINDERS_INTERVAL_MINUTES`), one business at a time inside its own scope. The settings of
+  the business live in the `tenants` collection and its ports are in `tenancy`. See
+  [reminders.md](./reminders.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
+
+- `platform` (spec 25: the panel of the owner of the system): domain rules (which actions of the
+  owner are valid and the Spanish message of every refusal), ports `PlatformUsageReader` (the
+  bookings of every business, counted), `PlatformMetricsCache` (the metrics of the installation,
+  kept a minute in memory), `PlatformAudit` (the log of the manual changes) and
+  `PlatformCredentials` (the key of the owner, compared in constant time), the reader of the
+  signals of the businesses and one use case per action (list, detail, metrics, suspend,
+  reactivate, extend the trial, change the plan by hand). The routes live under
+  `/api/platform/*` with their own key (`PLATFORM_API_KEY`, never the admin key of a business)
+  and their own guard, and they are exempt from the middleware of the business: they read across
+  businesses through the explicit `unscoped` escape and never read the data of a client. See
+  [platform.md](./platform.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
+
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth', 'signup', 'tenancy', 'billing', 'reminders', 'platform']`.
 
 Temporary ports (they read data owned by a module that has not migrated yet):
 
 | Port | Adapter today | Replaced by |
 | --- | --- | --- |
-| `BookingActivity` | reads the bookings collection | spec 13 (`bookings`) |
+| `BookingActivity` | reads the bookings collection | spec 14 (`bookings`) |
+| `OccupiedSlotsReader` | `MongoOccupiedSlotsReader` reads the bookings collection through the `Booking` schema | spec 14 (`bookings`) |
+| `CatalogLookup` | `CatalogFacadeLookup` wraps the temporary `CatalogService` facade | when the facade is deleted (specs 17 and 26) |
 
 Other temporary crossings: the catalog's schedule controller counts the bookings a schedule leaves
 out of hours with `ScheduleImpactService` (`src/admin/schedule-impact.ts`), which stays in `admin`
-until spec 14; and `src/catalog/locations.ts` keeps `LocationNotFoundError` for `bookings` and
-`availability` until spec 13.
+until spec 14; and `src/catalog/locations.ts` keeps `LocationNotFoundError` for `bookings` and the
+`AvailabilityService` facade until they migrate.
 
-Others (`availability`, `bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
+Others (`bookings`, `admin`, `auth`, `email`) still use the
 previous style and are migrated one per spec. Do not extend the previous style in new code.
 
 ## Commands
@@ -138,3 +178,31 @@ previous style and are migrated one per spec. Do not extend the previous style i
   `booking_int_test` only (a name that does not end with `_int_test` is refused), empties it between
   tests and fails with a clear message when MongoDB is unreachable: start it with
   `docker start booking-e2e-mongo`.
+
+## Tenant context (spec 18)
+
+The business a request belongs to travels through the `TenantContext` and
+`TenantScope` ports (`src/shared/application/tenant-context.port.ts`), backed
+by an `AsyncLocalStorage` adapter. Domain and application code never read it:
+only adapters do.
+
+- The HTTP edge (`TenantMiddleware`) opens the scope from the `X-Tenant`
+  header; no header means the default business.
+- The `tenantScopePlugin` (`src/shared/infrastructure/mongo`) filters every
+  Mongoose operation by `tenantId` and stamps it on every stored document. It
+  fails closed: with no business in the context it throws.
+- `unscoped(reason, fn)` is the only escape (migration, scripts, tenant
+  resolution).
+- The WebSocket handshake needs the admin credentials and joins the room
+  `tenant:<tenantId>`; notifications go to that room only.
+
+See `docs/tenancy.md` for the model, the commands and how to add a collection.
+
+## Atlas limits (spec 22)
+
+Cross-cutting pieces for the free Atlas tier, all behind ports: `RateLimiter`
+(`PUBLIC_RATE_LIMITER`, sliding window, `PublicRateLimitGuard` on the three public
+routes), `AvailabilityCache` (+ `AvailabilityInvalidator`, applied to the writer
+ports by `invalidatingWriter` in the module files), `TenantStorageMeter` /
+`TenantStorageStore` / `StorageGate` (storage quota). `src/scripts/db-backup.ts`
+wraps `mongodump` / `mongorestore`. See `docs/atlas-limits.md`.

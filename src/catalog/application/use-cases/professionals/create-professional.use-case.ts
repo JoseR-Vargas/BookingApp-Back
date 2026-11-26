@@ -1,4 +1,8 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import {
+  PLAN_GATE,
+  PlanGate,
+} from '../../../../shared/application/plan-gate.port';
 import { Result, err, ok } from '../../../../shared/domain/result';
 import { CLOCK, Clock } from '../../../../shared/application/clock.port';
 import { NoActiveLocationError } from '../../../domain/catalog.errors';
@@ -33,7 +37,8 @@ export interface CreateProfessionalCommand {
 
 /**
  * Creates a professional under a slug of its name. Without `locations` it
- * works at the default location; given ones must all be active.
+ * works at the default location; given ones must all be active. A business
+ * whose plan is at its limit of professionals gets a 403 (spec 23).
  */
 @Injectable()
 export class CreateProfessionalUseCase {
@@ -42,11 +47,15 @@ export class CreateProfessionalUseCase {
     @Inject(LOCATION_READER) private readonly locations: LocationReader,
     @Inject(BOOKING_ACTIVITY) private readonly activity: BookingActivity,
     @Inject(CLOCK) private readonly clock: Clock,
+    // A business without a subscription is not governed by a plan (spec 23).
+    @Optional() @Inject(PLAN_GATE) private readonly plans?: PlanGate,
   ) {}
 
   async execute(
     command: CreateProfessionalCommand,
   ): Promise<Result<ProfessionalView>> {
+    const plan = await this.plans?.check('professional');
+    if (plan && !plan.ok) return plan;
     const { locations, ...fields } = command.input;
     const defaultId = defaultLocationId(await this.locations.list());
     if (defaultId === null) return err(new NoActiveLocationError());

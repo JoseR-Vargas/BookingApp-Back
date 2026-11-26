@@ -51,7 +51,7 @@ answers a virtual "principal" built from the same legacy schedule, so nothing fa
 | HTTP | `src/catalog/infrastructure/http/` | `LocationsAdminController`, `ScheduleAdminController`, `PublicAvailabilityAdminController` and their input parsers |
 
 `CatalogService` and `CatalogAdminService` are temporary facades over the use cases for `bookings`,
-`availability`, `admin` and the WhatsApp bot: they translate a business failure into the
+`availability` and `admin`: they translate a business failure into the
 exception those callers expect (`LocationNotFoundError` from `src/catalog/locations.ts`, Nest
 `400`/`404`). The facades are deleted as each consumer migrates.
 
@@ -59,7 +59,7 @@ exception those callers expect (`LocationNotFoundError` from `src/catalog/locati
 
 The **oldest active** location (`createdAt`). It is used when a request does not name a location
 (`GET /api/availability`, `POST /api/bookings/availability`, `GET /api/public-availability`, the
-WhatsApp bot), for professionals and bookings without the new field, and by the legacy
+legacy callers), for professionals and bookings without the new field, and by the legacy
 `PUT /api/admin/schedule`. Deactivating the oldest one moves the default to the next oldest.
 
 ## Rotation rule
@@ -105,7 +105,7 @@ Validation messages: `El nombre del local es obligatorio (máximo 80 caracteres)
 
 ## Stage-2 limitations
 
-- The WhatsApp bot is untouched. It asks `getAvailability` without `locationId`, so it only
+- The legacy callers are untouched. They ask `getAvailability` without `locationId`, so they only
   offers the hours of the **default location**, and it creates bookings without `location`. While
   a single location is active that books at the default location, as before. **With several
   active locations `POST /api/bookings` rejects a booking without `location`**

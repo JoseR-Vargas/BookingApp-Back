@@ -2,6 +2,8 @@ import { Server } from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
+import { CountAffectedBookingsUseCase } from '../../../admin/application/use-cases/count-affected-bookings.use-case';
+import { MongoUpcomingBookingsReader } from '../../../admin/infrastructure/mongo-upcoming-bookings.reader';
 import { ScheduleImpactService } from '../../../admin/schedule-impact';
 import { DomainErrorFilter } from '../../../shared/infrastructure/http/domain-error.filter';
 import { SEED_SCHEDULE } from '../../domain/seed-schedule';
@@ -84,7 +86,11 @@ describe('Location, schedule and public availability routes (swap proof: in-memo
         ...inMemoryCatalogProviders(kit, fixedClock(NOW)),
         {
           provide: ScheduleImpactService,
-          useValue: new ScheduleImpactService(bookingModel as never),
+          useValue: new ScheduleImpactService(
+            new CountAffectedBookingsUseCase(
+              new MongoUpcomingBookingsReader(bookingModel as never),
+            ),
+          ),
         },
       ],
     }).compile();

@@ -1,3 +1,4 @@
+import { DefaultTenantScope } from '../../../../tenancy/infrastructure/default-tenant.scope';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -29,9 +30,15 @@ export class CatalogSeeder {
     @InjectModel(BusinessSettingsRecord.name)
     private readonly settingsModel: Model<BusinessSettingsRecord>,
     private readonly ensurePrincipalLocation: EnsurePrincipalLocationUseCase,
+    private readonly defaultTenant: DefaultTenantScope,
   ) {}
 
+  /** The seeding belongs to the default business (spec 18). */
   async seed(): Promise<void> {
+    await this.defaultTenant.run(() => this.seedInDefaultTenant());
+  }
+
+  private async seedInDefaultTenant(): Promise<void> {
     for (const { available, id, ...fields } of PROFESSIONALS) {
       await insertIfAbsent(
         this.professionalModel,
@@ -46,6 +53,15 @@ export class CatalogSeeder {
         { ...fields, active: true },
       );
     }
+    await this.seedBase();
+  }
+
+  /**
+   * The base of a new business: its schedule settings and its "Principal"
+   * location, with no professionals or services. It runs in the scope of the
+   * business it seeds (spec 18).
+   */
+  async seedBase(): Promise<void> {
     await insertIfAbsent(
       this.settingsModel,
       { key: SCHEDULE_KEY },

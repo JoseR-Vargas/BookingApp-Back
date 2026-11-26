@@ -1,122 +1,64 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Booking } from '../bookings/schemas/booking.schema';
-import { CatalogService } from '../catalog/catalog.service';
-import { toWeeklySchedule } from '../catalog/locations';
+import { LocationNotFoundError } from '../catalog/locations';
+import { ServiceSelectionError } from '../catalog/service-selection';
+import { GetAvailabilityUseCase } from './application/use-cases/get-availability.use-case';
+import { LocatedAvailability } from './domain/availability';
 import {
-  OccupyingBooking,
-  buildDaySlots,
-  dayOfWeekFromIsoDate,
-  freeStartTimes,
-  occupiedSlots,
-  offeredStarts,
-  slotsRequired,
-} from './availability.calculator';
+  InvalidDate,
+  LocationNotFound,
+  ServiceSelectionFailed,
+} from './domain/availability.errors';
 
-export interface ProfessionalAvailability {
-  id: string;
-  name: string;
-  slots: string[];
-}
+export type {
+  Availability,
+  LocatedAvailability,
+  ProfessionalAvailability,
+} from './domain/availability';
 
-export interface Availability {
-  date: string;
-  closed: boolean;
-  services: { id: string; name: string; duration: number }[];
-  totalDuration: number;
-  professionals: ProfessionalAvailability[];
-}
-
-/** What `getAvailability` returns: the day plus the location it was computed for. */
-export type LocatedAvailability = Availability & {
-  location: { id: string; name: string };
-};
-
-type BookedSlot = OccupyingBooking & { professional: { id: string } };
-
+/**
+ * What the WhatsApp bot still calls.
+ *
+ * @deprecated TEMPORARY FACADE (spec 13). It holds no business rule: it wraps
+ * `GetAvailabilityUseCase` and answers with the exceptions the bot expects
+ * (a BadRequestException, a LocationNotFoundError, a ServiceSelectionError).
+ * It is deleted when the bot migrates and calls the use case (spec 26).
+ */
 @Injectable()
 export class AvailabilityService {
   constructor(
-    @InjectModel(Booking.name) private bookingModel: Model<Booking>,
-    private readonly catalogService: CatalogService,
+    private readonly getAvailabilityUseCase: GetAvailabilityUseCase,
   ) {}
 
   /**
    * Free start times, per professional offering ALL the services, for the
    * back-to-back block of the services. Throws a ServiceSelectionError for an
-   * empty, duplicated or unknown service id, and a LocationNotFoundError for
-   * an unknown or inactive `locationId`. Without `locationId` the default
-   * location is used. Only the professionals assigned to the location are
-   * offered, with that location's schedule; occupancy is per professional, so
-   * a booking at another location blocks the same hours here.
+   * empty, duplicated or unknown service id, a LocationNotFoundError for an
+   * unknown or inactive `locationId` and a BadRequestException for an invalid
+   * date. Without `locationId` the default location is used.
    */
   async getAvailability(
     date: string,
     serviceIds: string[],
     locationId?: string,
   ): Promise<LocatedAvailability> {
-    const dayOfWeek = dayOfWeekFromIsoDate(date);
-    if (dayOfWeek === null) {
-      throw new BadRequestException('date must be a valid YYYY-MM-DD date');
-    }
-    const location = await this.catalogService.getLocation(locationId);
-    const { services, professionals, totalDuration } =
-      await this.catalogService.resolveServices(serviceIds, location.id);
-
-    const schedule = toWeeklySchedule(location);
-    const daySlots = buildDaySlots(dayOfWeek, schedule);
-    const closed = daySlots.length === 0;
-    const bookings = closed
-      ? []
-      : await this.findActiveBookings(
-          date,
-          professionals.map((professional) => professional.id),
-        );
-
-    const interval = schedule.slotIntervalMinutes;
-    const required = slotsRequired(totalDuration, interval);
-    const offered = new Set(offeredStarts(dayOfWeek, schedule));
-
-    return {
+    const result = await this.getAvailabilityUseCase.execute({
       date,
-      closed,
-      location: { id: location.id, name: location.name },
-      services: services.map(({ id, name, duration }) => ({
-        id,
-        name,
-        duration,
-      })),
-      totalDuration,
-      professionals: professionals.map((professional) => ({
-        id: professional.id,
-        name: professional.name,
-        slots: freeStartTimes(
-          daySlots,
-          occupiedSlots(
-            bookings.filter((b) => b.professional?.id === professional.id),
-          ),
-          required,
-          interval,
-        ).filter((time) => offered.has(time)),
-      })),
-    };
-  }
-
-  private findActiveBookings(
-    date: string,
-    professionalIds: string[],
-  ): Promise<BookedSlot[]> {
-    return this.bookingModel
-      .find(
-        {
-          date,
-          'professional.id': { $in: professionalIds },
-          status: { $ne: 'cancelled' },
-        },
-        { 'professional.id': 1, slots: 1 },
-      )
-      .lean<BookedSlot[]>()
-      .exec();
+      serviceIds,
+      locationId,
+    });
+    if (result.ok) {
+      return result.value;
+    }
+    const { error } = result;
+    if (error instanceof InvalidDate) {
+      throw new BadRequestException(error.message);
+    }
+    if (error instanceof LocationNotFound) {
+      throw new LocationNotFoundError(error.locationId);
+    }
+    if (error instanceof ServiceSelectionFailed) {
+      throw new ServiceSelectionError(error.failure, error.serviceId);
+    }
+    throw error;
   }
 }

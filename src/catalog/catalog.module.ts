@@ -1,10 +1,20 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleImpactService } from '../admin/schedule-impact';
-import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
+import { UPCOMING_BOOKINGS_READER } from '../admin/application/ports/upcoming-bookings.reader';
+import { CountAffectedBookingsUseCase } from '../admin/application/use-cases/count-affected-bookings.use-case';
+import { MongoUpcomingBookingsReader } from '../admin/infrastructure/mongo-upcoming-bookings.reader';
 import { CLOCK } from '../shared/application/clock.port';
+import {
+  AVAILABILITY_INVALIDATOR,
+  AvailabilityInvalidator,
+} from '../shared/application/availability-invalidator.port';
+import { invalidatingWriter } from '../shared/infrastructure/cache/invalidating-writer';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
+import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
+import { BillingModule } from '../billing/billing.module';
+import { TenancyModule } from '../tenancy/tenancy.module';
 import { LEGACY_SCHEDULE_READER } from './application/ports/legacy-schedule.reader';
 import { LOCATION_READER } from './application/ports/location.reader';
 import { LOCATION_WRITER } from './application/ports/location.writer';
@@ -46,7 +56,9 @@ import { SavePublicAvailabilityUseCase } from './application/use-cases/settings/
 import { CatalogAdminService } from './catalog-admin.service';
 import { CatalogController } from './catalog.controller';
 import { CatalogService } from './catalog.service';
-import { MongoBookingActivityAdapter } from './infrastructure/bookings/mongo-booking-activity.adapter';
+import { BOOKING_ACTIVITY_READER } from '../bookings/application/ports/booking-activity.reader';
+import { MongoBookingActivityReader } from '../bookings/infrastructure/persistence/mongo/mongo-booking-activity.reader';
+import { BookingActivityAdapter } from '../bookings/infrastructure/read-model/booking-activity.adapter';
 import { CatalogPhotoController } from './infrastructure/http/catalog-photo.controller';
 import { LocationsAdminController } from './infrastructure/http/locations-admin.controller';
 import { ProfessionalPhotosAdminController } from './infrastructure/http/professional-photos-admin.controller';
@@ -76,6 +88,9 @@ import {
   ServiceSchema,
 } from './infrastructure/persistence/mongo/service.entity';
 
+/** The invalidator is optional: a module tested alone has no cache (spec 22). */
+const optionalInvalidator = { token: AVAILABILITY_INVALIDATOR, optional: true };
+
 /**
  * Composition root of the catalog: the only place where ports are bound to
  * adapters. Swapping the database means new adapters and changing these lines.
@@ -84,6 +99,10 @@ import {
  */
 @Module({
   imports: [
+    // The seeding runs in the default business (spec 18).
+    TenancyModule,
+    // The plan gate of professionals and locations (spec 23).
+    BillingModule,
     MongooseModule.forFeature([
       { name: ProfessionalRecord.name, schema: ProfessionalSchema },
       { name: ServiceRecord.name, schema: ServiceSchema },
@@ -109,15 +128,54 @@ import {
     MongoLocationRepository,
     MongoBusinessSettingsRepository,
     { provide: PROFESSIONAL_READER, useExisting: MongoProfessionalRepository },
-    { provide: PROFESSIONAL_WRITER, useExisting: MongoProfessionalRepository },
+    // Writes that change the availability make its cache forget (spec 22).
+    {
+      provide: PROFESSIONAL_WRITER,
+      useFactory: (
+        repository: MongoProfessionalRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'insert',
+          'update',
+          'delete',
+        ]),
+      inject: [MongoProfessionalRepository, optionalInvalidator],
+    },
     {
       provide: PROFESSIONAL_PHOTO_STORE,
       useExisting: MongoProfessionalRepository,
     },
     { provide: SERVICE_READER, useExisting: MongoServiceRepository },
-    { provide: SERVICE_WRITER, useExisting: MongoServiceRepository },
+    {
+      provide: SERVICE_WRITER,
+      useFactory: (
+        repository: MongoServiceRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'insert',
+          'update',
+          'delete',
+          'removeProfessional',
+        ]),
+      inject: [MongoServiceRepository, optionalInvalidator],
+    },
     { provide: LOCATION_READER, useExisting: MongoLocationRepository },
-    { provide: LOCATION_WRITER, useExisting: MongoLocationRepository },
+    {
+      provide: LOCATION_WRITER,
+      useFactory: (
+        repository: MongoLocationRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'insert',
+          'insertIfAbsent',
+          'update',
+          'saveSchedule',
+        ]),
+      inject: [MongoLocationRepository, optionalInvalidator],
+    },
     {
       provide: LEGACY_SCHEDULE_READER,
       useExisting: MongoBusinessSettingsRepository,
@@ -131,7 +189,8 @@ import {
       useExisting: MongoBusinessSettingsRepository,
     },
     // Temporary port: answered from the bookings collection until `bookings` migrates (spec 13).
-    { provide: BOOKING_ACTIVITY, useClass: MongoBookingActivityAdapter },
+    { provide: BOOKING_ACTIVITY_READER, useClass: MongoBookingActivityReader },
+    { provide: BOOKING_ACTIVITY, useClass: BookingActivityAdapter },
     { provide: CLOCK, useClass: SystemClock },
     ListProfessionalsUseCase,
     CreateProfessionalUseCase,
@@ -162,6 +221,11 @@ import {
     GetPublicAvailabilityUseCase,
     SavePublicAvailabilityUseCase,
     // Counts the bookings a schedule leaves out of hours (`admin`, until spec 14).
+    {
+      provide: UPCOMING_BOOKINGS_READER,
+      useClass: MongoUpcomingBookingsReader,
+    },
+    CountAffectedBookingsUseCase,
     ScheduleImpactService,
     CatalogSeeder,
     CatalogService,

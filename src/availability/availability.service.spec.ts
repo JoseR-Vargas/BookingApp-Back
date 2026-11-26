@@ -4,7 +4,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CatalogService } from '../catalog/catalog.service';
 import { createFakeCatalog } from '../catalog/catalog.testing';
 import { Booking } from '../bookings/schemas/booking.schema';
+import { CATALOG_LOOKUP } from './application/ports/catalog-lookup.port';
+import { OCCUPIED_SLOTS_READER } from './application/ports/occupied-slots.reader';
+import { GetAvailabilityUseCase } from './application/use-cases/get-availability.use-case';
 import { AvailabilityService } from './availability.service';
+import { CatalogFacadeLookup } from './infrastructure/catalog/catalog-facade.lookup';
+import { MongoOccupiedSlotsReader } from './infrastructure/persistence/mongo/mongo-occupied-slots.reader';
 
 /** Half-hour start times from `first` to `last`, both inclusive. */
 const times = (first: string, last: string): string[] => {
@@ -37,6 +42,9 @@ describe('AvailabilityService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AvailabilityService,
+        GetAvailabilityUseCase,
+        { provide: CATALOG_LOOKUP, useClass: CatalogFacadeLookup },
+        { provide: OCCUPIED_SLOTS_READER, useClass: MongoOccupiedSlotsReader },
         { provide: CatalogService, useValue: fake.catalog },
         { provide: getModelToken(Booking.name), useValue: bookingModel },
       ],

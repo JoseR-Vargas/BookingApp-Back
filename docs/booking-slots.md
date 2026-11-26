@@ -11,7 +11,11 @@
   `[open, close)`, stored sorted): that day offers exactly those starts and ignores the interval;
   a day without `starts` follows the interval. `PUT /api/admin/schedule` replaces the whole week,
   so a day sent without `starts` loses its list. `offeredStarts` in `src/shared/domain/schedule/schedule.rules.ts` (re-exported by `src/availability/availability.calculator.ts`) is the single
-  source of this rule: availability, booking creation and booking updates all go through it.
+  source of this rule: availability, booking creation and booking updates all go through it. The
+  occupancy rules (`occupiedSlots`, `freeStartTimes`, `windowSlots`) live in
+  `src/availability/domain/occupancy.rules.ts`, re-exported by the same calculator file for the
+  modules that are not migrated yet; the availability of a day is `GetAvailabilityUseCase`
+  (`src/availability/application/use-cases/`).
   The hours
   are stored per weekday as `HH:mm` strings **in each location** (`locations` collection, see
   [locations.md](./locations.md)) and edited from the admin panel

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Put, UseGuards } from '@nestjs/common';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { DeleteLogoUseCase } from '../../application/use-cases/delete-logo.use-case';
 import { SaveBrandingUseCase } from '../../application/use-cases/save-branding.use-case';
@@ -10,6 +11,7 @@ import { PublicBranding, toPublicBranding } from './branding.presenter';
 /** Branding configuration endpoints, all behind the admin key. */
 @Controller('admin/branding')
 @UseGuards(AdminKeyGuard)
+@Roles('owner')
 export class BrandingAdminController {
   constructor(
     private readonly saveBranding: SaveBrandingUseCase,

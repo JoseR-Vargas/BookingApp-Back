@@ -1,6 +1,8 @@
-import { MailerService } from '@nestjs-modules/mailer';
-import { Booking } from '../bookings/schemas/booking.schema';
+import { Booking } from '../bookings/domain/booking';
 import { EmailService } from './email.service';
+import { SendBookingConfirmationUseCase } from './application/use-cases/send-booking-confirmation.use-case';
+import { SendCancellationConfirmationUseCase } from './application/use-cases/send-cancellation-confirmation.use-case';
+import { EnvPublicAppUrl } from './infrastructure/env-public-app-url';
 
 const booking = {
   client: { name: 'Juan Pérez', email: 'juan@example.com', phone: '123' },
@@ -27,10 +29,15 @@ const booking = {
 } as unknown as Booking;
 
 describe('EmailService', () => {
+  // The transport is a port now: the fake records the messages that leave.
   const sendMail = jest.fn().mockResolvedValue(undefined);
-  const emailService = new EmailService({
-    sendMail,
-  } as unknown as MailerService);
+  const sender = { send: sendMail };
+  const appUrl = new EnvPublicAppUrl();
+  const emailService = new EmailService(
+    { sendMail } as never,
+    new SendBookingConfirmationUseCase(sender, appUrl),
+    new SendCancellationConfirmationUseCase(sender, appUrl),
+  );
 
   beforeEach(() => sendMail.mockClear());
 

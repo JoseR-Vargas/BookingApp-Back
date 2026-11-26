@@ -339,11 +339,17 @@ export function createFakeCatalog(initial?: {
     ),
     getPublicCatalog: new GetPublicCatalogUseCase(services, professionals),
   };
+  // The seeding runs in the default business (spec 18); the tests run without
+  // a business in the context, so the scope is a pass-through here.
+  const defaultTenant = {
+    run: <T>(fn: () => Promise<T>) => fn(),
+  };
   const seeder = new CatalogSeeder(
     professionalModel,
     serviceModel,
     settingsModel,
     ensurePrincipalLocation,
+    defaultTenant as never,
   );
   const catalog = new CatalogService(
     seeder,

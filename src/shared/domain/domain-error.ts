@@ -6,7 +6,16 @@ export type DomainErrorKind =
   | 'validation'
   | 'not-found'
   | 'conflict'
-  | 'forbidden';
+  | 'forbidden'
+  | 'unavailable'
+  /**
+   * The tenant context is missing or names another business (spec 18). It is a
+   * programming error of the server, never a business failure of the request,
+   * so it answers 500.
+   */
+  | 'tenant'
+  /** The caller proves nothing valid (a webhook with a bad signature, spec 23). */
+  | 'unauthorized';
 
 /**
  * Base class of every error a business rule can raise. It extends `Error`

@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATED_MODULES } from './architecture/migrated-modules';
 import { RESULT_MODULES } from './architecture/result-modules';
@@ -63,5 +63,36 @@ describe('architecture: shared schedule core', () => {
       noThrow: true,
     }).map((v) => formatViolation(v, SRC));
     expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * The WhatsApp bot is gone (the owner decided): no module may import from
+ * `src/whatsapp`, because that directory no longer exists.
+ */
+describe('architecture: whatsapp is gone', () => {
+  const IMPORTS_WHATSAPP = /from\s+['"][^'"]*\/whatsapp(\/|['"])/;
+
+  const filesIn = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? filesIn(join(dir, entry.name))
+        : entry.name.endsWith('.ts')
+          ? [join(dir, entry.name)]
+          : [],
+    );
+
+  it('has no module of whatsapp left', () => {
+    expect(existsSync(join(SRC, 'whatsapp'))).toBe(false);
+  });
+
+  it('imports nothing from a whatsapp module', () => {
+    const files = ['admin', 'availability', 'billing', 'bookings', 'branding', 'catalog', 'email', 'platform', 'reminders', 'shared', 'tenancy']
+      .flatMap((module) => filesIn(join(SRC, module)));
+    const offenders = files.filter((file) =>
+      IMPORTS_WHATSAPP.test(readFileSync(file, 'utf8')),
+    );
+    expect(files.length).toBeGreaterThan(50);
+    expect(offenders).toEqual([]);
   });
 });

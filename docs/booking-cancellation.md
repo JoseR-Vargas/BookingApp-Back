@@ -37,10 +37,8 @@ Only when the booking really changes (not on an idempotent repeat or a lost race
 - The slot is freed: the unique slot index ignores cancelled bookings.
 - Socket event `bookingCancelled` with `{ id, status: "cancelled" }`, so an open admin panel updates.
 - An email to the client, if the booking has one.
-- A WhatsApp template to the admin, if `WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME` is set
-  (see `docs/whatsapp-setup.md`, section 4.1).
 
-Email, socket and WhatsApp are best effort: a failure is logged and never fails the cancellation.
+Email and socket are best effort: a failure is logged and never fails the cancellation.
 
 ## Access control
 
@@ -54,7 +52,6 @@ and the two cancel routes.
 | -------- | ---------- | ---------- |
 | `BUSINESS_TIMEZONE` | Judging the one-minute cutoff | Cancel endpoints answer `503` |
 | `PUBLIC_APP_URL` | The link in the confirmation email | The email is sent without the cancel block |
-| `WHATSAPP_ADMIN_CANCEL_TEMPLATE_NAME` | The admin WhatsApp notice | Notice skipped with a warning |
 | `ADMIN_API_KEY` | The admin routes above | They answer `401` |
 
 ## Existing bookings

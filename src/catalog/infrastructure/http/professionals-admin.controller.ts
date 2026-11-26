@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { currentBusinessDate } from '../../../admin/schedule-impact';
 import { AdminKeyGuard } from '../../../auth/admin-key.guard';
+import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { CreateProfessionalUseCase } from '../../application/use-cases/professionals/create-professional.use-case';
 import { DeactivateProfessionalUseCase } from '../../application/use-cases/professionals/deactivate-professional.use-case';
@@ -23,6 +24,7 @@ import {
 /** Professional endpoints of the admin panel, all behind the admin key. */
 @Controller('admin/professionals')
 @UseGuards(AdminKeyGuard)
+@Roles('owner')
 export class ProfessionalsAdminController {
   constructor(
     private readonly createProfessional: CreateProfessionalUseCase,

@@ -1,4 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Types } from 'mongoose';
+import { tenantScopePlugin } from '../../../../shared/infrastructure/mongo/tenant-scope.plugin';
 
 /** A bookable service stored in the `services` collection. */
 @Schema({ collection: 'services', versionKey: false })
@@ -30,8 +32,15 @@ export class ServiceRecord {
 
   @Prop({ type: Boolean, default: true })
   active: boolean;
+
+  /** The business this document belongs to (spec 18). */
+  @Prop({ type: Types.ObjectId, required: false, index: true })
+  tenantId?: Types.ObjectId;
 }
 
 export const ServiceSchema = SchemaFactory.createForClass(ServiceRecord);
 
-ServiceSchema.index({ id: 1 }, { unique: true });
+// Every document belongs to a business, and every query is filtered by it (spec 18).
+tenantScopePlugin(ServiceSchema);
+
+ServiceSchema.index({ tenantId: 1, id: 1 }, { unique: true });

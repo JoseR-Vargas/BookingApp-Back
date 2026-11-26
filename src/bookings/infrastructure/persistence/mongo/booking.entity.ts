@@ -1,0 +1,171 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import {
+  BOOKING_STATUSES,
+  BookedService,
+  BookingStatus,
+} from '../../../domain/booking';
+import {
+  REMINDER_CHANNELS,
+  ReminderRecord,
+} from '../../../../shared/domain/reminders';
+import { tenantScopePlugin } from '../../../../shared/infrastructure/mongo/tenant-scope.plugin';
+import { Types } from 'mongoose';
+
+export { BOOKING_STATUSES };
+export type { BookedService, BookingStatus };
+
+/** A booking stored in the `bookings` collection; never leaves this folder, the mapper turns it into a domain booking. */
+@Schema({ timestamps: true })
+export class Booking extends Document {
+  @Prop({
+    type: {
+      name: { type: String, required: true },
+      id: { type: String, required: false },
+      // Optional: WhatsApp bookings only provide a phone number.
+      email: { type: String, required: false },
+      phone: { type: String, required: true },
+    },
+    required: true,
+  })
+  client: {
+    name: string;
+    id?: string;
+    email?: string;
+    phone: string;
+  };
+
+  /** Services performed back-to-back, in order, as priced when booked. */
+  @Prop({
+    type: [
+      {
+        _id: false,
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        price: { type: Number, required: true },
+        duration: { type: Number, required: true },
+      },
+    ],
+    required: true,
+  })
+  services: BookedService[];
+
+  @Prop({ required: true })
+  totalPrice: number;
+
+  /** Sum of the service durations, in minutes. */
+  @Prop({ required: true })
+  totalDuration: number;
+
+  @Prop({
+    type: {
+      id: { type: String, required: true },
+      name: { type: String, required: true },
+    },
+    required: true,
+  })
+  professional: {
+    id: string;
+    name: string;
+  };
+
+  /**
+   * Where the booking happens, as named when it was made. Computed
+   * server-side; absent on bookings created before locations existed, which
+   * read as the default location.
+   */
+  @Prop({
+    type: {
+      _id: false,
+      id: { type: String, required: true },
+      name: { type: String, required: true },
+    },
+    required: false,
+  })
+  location?: {
+    id: string;
+    name: string;
+  };
+
+  @Prop({ required: true })
+  date: string;
+
+  @Prop({ required: true })
+  time: string;
+
+  /** Slot start times ('HH:MM') the booking occupies. Computed server-side. */
+  @Prop({ type: [String], required: true })
+  slots: string[];
+
+  @Prop({ default: '' })
+  notes: string;
+
+  @Prop({ type: String, enum: BOOKING_STATUSES, default: 'confirmed' })
+  status: BookingStatus;
+
+  /**
+   * SHA-256 hex digest of the secret the client uses to cancel. Queries never
+   * return it (`select: false`); a freshly saved document does, so it is
+   * stripped before the booking leaves the service. Bookings created before
+   * the cancel link existed have none.
+   */
+  @Prop({ type: String, select: false })
+  cancelTokenHash?: string;
+
+  /**
+   * The reminders that were sent for this booking (spec 24): one entry per
+   * window and channel, with the attempts it took and why it failed.
+   */
+  @Prop({
+    type: [
+      {
+        _id: false,
+        kind: { type: String, required: true },
+        channel: { type: String, required: true, enum: REMINDER_CHANNELS },
+        sentAt: { type: Date, required: true },
+        ok: { type: Boolean, required: true },
+        error: { type: String, required: false },
+        attempts: { type: Number, required: true, default: 1 },
+      },
+    ],
+    required: false,
+  })
+  reminders?: ReminderRecord[];
+
+  /**
+   * The digest of the secret the reminder carries, so the cancel link of a
+   * reminder cancels this booking and only this one (spec 24). Queries never
+   * return it (`select: false`).
+   */
+  @Prop({ type: String, select: false })
+  reminderCancelTokenHash?: string;
+
+  /** The business this document belongs to (spec 18). */
+  @Prop({ type: Types.ObjectId, required: false, index: true })
+  tenantId?: Types.ObjectId;
+}
+
+export const BookingSchema = SchemaFactory.createForClass(Booking);
+
+// Every document belongs to a business, and every query is filtered by it (spec 18).
+tenantScopePlugin(BookingSchema);
+
+/** Lookup by token on the public cancel endpoints. */
+BookingSchema.index({ cancelTokenHash: 1 }, { unique: true, sparse: true });
+
+/**
+ * One confirmed booking per professional, date and slot. Being multikey on
+ * `slots`, uniqueness applies to each array element across documents.
+ * Cancelled bookings are not indexed, so they never block.
+ */
+BookingSchema.index(
+  { tenantId: 1, 'professional.id': 1, date: 1, slots: 1 },
+  {
+    name: 'uniq_confirmed_professional_date_slot',
+    unique: true,
+    partialFilterExpression: {
+      status: 'confirmed',
+      slots: { $exists: true },
+    },
+  },
+);

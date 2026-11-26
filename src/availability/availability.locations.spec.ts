@@ -1,4 +1,5 @@
-import { AvailabilityService } from './availability.service';
+import { businessClockAt, buildAvailability } from './availability.testing';
+import { MongoOccupiedSlotsReader } from './infrastructure/persistence/mongo/mongo-occupied-slots.reader';
 import { SCHEDULE } from '../catalog/catalog.config';
 import { createFakeCatalog, createFakeModel } from '../catalog/catalog.testing';
 import { LocationNotFoundError } from '../catalog/locations';
@@ -42,9 +43,10 @@ describe('AvailabilityService by location (S4)', () => {
     // Alex rotates between the two locations, María stays in Principal.
     fake.professionalModel.docs[0].locationIds = ['principal', 'centro'];
     fake.professionalModel.docs[1].locationIds = ['principal'];
-    const service = new AvailabilityService(
-      createFakeModel(bookings),
+    const { service } = buildAvailability(
       fake.catalog,
+      new MongoOccupiedSlotsReader(createFakeModel(bookings)),
+      businessClockAt(new Date()),
     );
     return { service, fake };
   };
