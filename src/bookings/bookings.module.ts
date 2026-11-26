@@ -21,6 +21,7 @@ import { GetStatisticsUseCase } from './application/use-cases/get-statistics.use
 import { ListBookingsUseCase } from './application/use-cases/list-bookings.use-case';
 import { UpdateBookingUseCase } from './application/use-cases/update-booking.use-case';
 import { BookingsService } from './bookings.service';
+import { TenancyModule } from '../tenancy/tenancy.module';
 import { BookingsGateway } from './bookings.gateway';
 import { NodeCancelTokens } from './infrastructure/crypto/node-cancel-tokens';
 import { BookingsController } from './infrastructure/http/bookings.controller';
@@ -56,6 +57,7 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     MongooseModule.forFeature([{ name: Booking.name, schema: BookingSchema }]),
     EmailModule,
     CatalogModule,
+    TenancyModule,
     // Outbound only; WhatsappModule imports BookingsModule, never the reverse.
     WhatsappApiModule,
   ],

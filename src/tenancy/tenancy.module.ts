@@ -11,7 +11,10 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { TENANT_SCOPE } from '../shared/application/tenant-context.port';
+import {
+  TENANT_CONTEXT,
+  TENANT_SCOPE,
+} from '../shared/application/tenant-context.port';
 import { AsyncLocalStorageTenantContext } from '../shared/infrastructure/tenancy/async-local-storage-tenant-context';
 import { CLOCK } from '../shared/application/clock.port';
 import { SystemClock } from '../shared/infrastructure/system.clock';
@@ -53,6 +56,7 @@ class TenantBootstrap implements OnModuleInit {
     { provide: TENANT_READER, useClass: MongoTenantRepository },
     { provide: TENANT_WRITER, useClass: MongoTenantRepository },
     { provide: TENANT_SCOPE, useClass: AsyncLocalStorageTenantContext },
+    { provide: TENANT_CONTEXT, useExisting: TENANT_SCOPE },
     { provide: CLOCK, useClass: SystemClock },
     TenantService,
     TenantMiddleware,
@@ -64,6 +68,7 @@ class TenantBootstrap implements OnModuleInit {
     TENANT_READER,
     TENANT_WRITER,
     TENANT_SCOPE,
+    TENANT_CONTEXT,
     TenantService,
     TenantMiddleware,
     DefaultTenantScope,

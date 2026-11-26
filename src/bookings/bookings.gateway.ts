@@ -1,10 +1,21 @@
+import { Inject, Optional } from '@nestjs/common';
 import {
+  OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
+import { EnvAdminCredentials } from '../auth/infrastructure/env-admin-credentials';
+import {
+  TENANT_CONTEXT,
+  TenantContext,
+} from '../shared/application/tenant-context.port';
+import { TenantService } from '../tenancy/application/tenant.service';
+
+/** The room every socket of a business joins (spec 18). */
+export const tenantRoom = (tenantId: string): string => `tenant:${tenantId}`;
 
 @WebSocketGateway({
   cors: {
@@ -16,10 +27,58 @@ import { Server } from 'socket.io';
   },
 })
 export class BookingsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
+
+  private readonly credentials = new EnvAdminCredentials();
+
+  constructor(
+    @Optional() private readonly tenants?: TenantService,
+    @Optional()
+    @Inject(TENANT_CONTEXT)
+    private readonly context?: TenantContext,
+  ) {}
+
+  /**
+   * The handshake needs the admin credentials and names the business
+   * (`auth: { key, username, tenant }`). Without valid credentials the socket
+   * is refused; a valid one joins the room of its business only.
+   */
+  afterInit(server: Server): void {
+    server.use((socket, next) => {
+      void this.authenticate(socket).then(
+        () => next(),
+        () => next(new Error('Unauthorized')),
+      );
+    });
+  }
+
+  private async authenticate(socket: Socket): Promise<void> {
+    const auth = (socket.handshake?.auth ?? {}) as Record<string, unknown>;
+    const text = (value: unknown) =>
+      typeof value === 'string' && value !== '' ? value : undefined;
+    if (!this.credentials.isValid(text(auth.key), text(auth.username))) {
+      throw new Error('Unauthorized');
+    }
+    if (!this.tenants) throw new Error('Unauthorized');
+    const slug = text(auth.tenant);
+    const resolved = slug
+      ? await this.tenants.resolve(slug)
+      : await this.tenants.resolveDefault();
+    if (!resolved.ok) throw new Error('Unauthorized');
+    await socket.join(tenantRoom(resolved.value.id));
+  }
+
+  /** The room of the business in force, or undefined outside a business. */
+  private room(): string | undefined {
+    try {
+      return tenantRoom(this.context!.current().id);
+    } catch {
+      return undefined;
+    }
+  }
 
   handleConnection(client: any) {
     console.log(`Cliente conectado: ${client.id}`);
@@ -31,9 +90,10 @@ export class BookingsGateway
 
   notifyNewBooking(booking: any) {
     // Solo emitir si hay servidor y clientes conectados
-    if (this.server) {
+    const room = this.room();
+    if (this.server && room) {
       try {
-        this.server.emit('newBooking', booking);
+        this.server.to(room).emit('newBooking', booking);
       } catch (error) {
         // Si falla la notificación WebSocket, no es crítico, solo loguear
         console.error('Error al notificar nueva reserva por WebSocket:', error);
@@ -46,9 +106,12 @@ export class BookingsGateway
    * id, so the payload can never carry client data.
    */
   notifyBookingCancelled(id: string) {
-    if (this.server) {
+    const room = this.room();
+    if (this.server && room) {
       try {
-        this.server.emit('bookingCancelled', { id, status: 'cancelled' });
+        this.server
+          .to(room)
+          .emit('bookingCancelled', { id, status: 'cancelled' });
       } catch (error) {
         console.error('Error al notificar cancelación por WebSocket:', error);
       }

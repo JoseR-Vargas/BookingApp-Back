@@ -39,6 +39,7 @@ export function configureApp(app: NestExpressApplication): void {
       'Authorization',
       'Accept',
       'X-Admin-Username',
+      'X-Tenant',
     ],
     exposedHeaders: ['Content-Type', 'Authorization'],
     preflightContinue: false,

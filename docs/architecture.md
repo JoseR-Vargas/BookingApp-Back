@@ -149,3 +149,22 @@ previous style and are migrated one per spec. Do not extend the previous style i
   `booking_int_test` only (a name that does not end with `_int_test` is refused), empties it between
   tests and fails with a clear message when MongoDB is unreachable: start it with
   `docker start booking-e2e-mongo`.
+
+## Tenant context (spec 18)
+
+The business a request belongs to travels through the `TenantContext` and
+`TenantScope` ports (`src/shared/application/tenant-context.port.ts`), backed
+by an `AsyncLocalStorage` adapter. Domain and application code never read it:
+only adapters do.
+
+- The HTTP edge (`TenantMiddleware`) opens the scope from the `X-Tenant`
+  header; no header means the default business.
+- The `tenantScopePlugin` (`src/shared/infrastructure/mongo`) filters every
+  Mongoose operation by `tenantId` and stamps it on every stored document. It
+  fails closed: with no business in the context it throws.
+- `unscoped(reason, fn)` is the only escape (migration, scripts, tenant
+  resolution).
+- The WebSocket handshake needs the admin credentials and joins the room
+  `tenant:<tenantId>`; notifications go to that room only.
+
+See `docs/tenancy.md` for the model, the commands and how to add a collection.
