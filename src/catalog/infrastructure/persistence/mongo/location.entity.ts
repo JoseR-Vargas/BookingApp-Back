@@ -48,4 +48,4 @@ export const LocationSchema = SchemaFactory.createForClass(LocationRecord);
 // Every document belongs to a business, and every query is filtered by it (spec 18).
 tenantScopePlugin(LocationSchema);
 
-LocationSchema.index({ id: 1 }, { unique: true });
+LocationSchema.index({ tenantId: 1, id: 1 }, { unique: true });

@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import { describeBrandingRepositoryContract } from '../../../application/ports/branding-repository.contract';
 import {
@@ -34,7 +35,11 @@ describe('MongoBrandingRepository', () => {
       reader: repo,
       writer: repo,
       seedLegacyDocument: async (doc) => {
-        await collection.insertOne({ key: BRANDING_KEY, ...doc });
+        await collection.insertOne({
+          tenantId: TEST_TENANT_ID,
+          key: BRANDING_KEY,
+          ...doc,
+        });
       },
       countDocuments: () => collection.countDocuments(),
     };

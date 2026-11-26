@@ -53,6 +53,15 @@ export class CatalogSeeder {
         { ...fields, active: true },
       );
     }
+    await this.seedBase();
+  }
+
+  /**
+   * The base of a new business: its schedule settings and its "Principal"
+   * location, with no professionals or services. It runs in the scope of the
+   * business it seeds (spec 18).
+   */
+  async seedBase(): Promise<void> {
     await insertIfAbsent(
       this.settingsModel,
       { key: SCHEDULE_KEY },

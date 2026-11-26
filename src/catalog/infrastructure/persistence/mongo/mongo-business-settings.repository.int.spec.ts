@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import { describeBusinessSettingsContract } from '../../../application/ports/business-settings.contract';
 import {
@@ -39,16 +40,17 @@ describe('MongoBusinessSettingsRepository', () => {
       legacy: repo,
       seed: async (settings) => {
         await collection.updateOne(
-          { key: SCHEDULE_KEY },
-          { $setOnInsert: settings },
+          { tenantId: TEST_TENANT_ID, key: SCHEDULE_KEY },
+          { $setOnInsert: { ...settings, tenantId: TEST_TENANT_ID } },
           { upsert: true },
         );
       },
       stored: async () => {
         const doc = await collection.findOne({ key: SCHEDULE_KEY });
         if (!doc) return null;
-        const { _id, key, ...rest } = doc;
+        const { _id, key, tenantId, ...rest } = doc;
         void _id;
+        void tenantId;
         void key;
         return rest;
       },

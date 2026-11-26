@@ -59,4 +59,4 @@ export const ProfessionalSchema =
 // Every document belongs to a business, and every query is filtered by it (spec 18).
 tenantScopePlugin(ProfessionalSchema);
 
-ProfessionalSchema.index({ id: 1 }, { unique: true });
+ProfessionalSchema.index({ tenantId: 1, id: 1 }, { unique: true });

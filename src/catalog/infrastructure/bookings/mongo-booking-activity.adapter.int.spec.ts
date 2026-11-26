@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import { describeBookingActivityContract } from '../../application/ports/booking-activity.contract';
 import {
@@ -31,6 +32,7 @@ describe('MongoBookingActivityAdapter', () => {
       activity: new MongoBookingActivityAdapter(model),
       seed: async (booking) => {
         await collection.insertOne({
+          tenantId: TEST_TENANT_ID,
           professional: { id: booking.professionalId, name: 'Pro' },
           services: booking.serviceIds.map((id) => ({
             id,

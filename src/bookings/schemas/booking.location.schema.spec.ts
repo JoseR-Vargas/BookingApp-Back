@@ -41,6 +41,7 @@ describe('location fields in the Mongoose schemas', () => {
     );
 
     expect(unique?.[0]).toEqual({
+      tenantId: 1,
       'professional.id': 1,
       date: 1,
       slots: 1,

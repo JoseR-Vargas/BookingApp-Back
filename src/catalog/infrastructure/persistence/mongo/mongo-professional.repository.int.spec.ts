@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import { describeProfessionalRepositoryContract } from '../../../application/ports/professional-repository.contract';
 import {
@@ -34,9 +35,10 @@ describe('MongoProfessionalRepository', () => {
       // creation order holds across seeded and inserted documents.
       seed: async ({ id, ...document }) => {
         await collection.updateOne(
-          { id },
+          { tenantId: TEST_TENANT_ID, id },
           {
             $setOnInsert: {
+              tenantId: TEST_TENANT_ID,
               specialty: '',
               experience: '',
               rating: 5,

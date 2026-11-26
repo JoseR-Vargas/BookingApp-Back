@@ -7,9 +7,27 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK, Clock } from '../../shared/application/clock.port';
 import { Result, err, ok } from '../../shared/domain/result';
 import { Tenant } from '../domain/tenant';
-import { TenantNotFound, TenantSuspended } from '../domain/tenant.errors';
-import { isValidSlug, normalizeSlug } from '../domain/tenant.rules';
-import { TENANT_READER, TenantReader } from './ports/tenant.repository';
+import {
+  DuplicateTenantSlug,
+  InvalidTenantName,
+  InvalidTenantSlug,
+  ReservedTenantSlug,
+  TenantNotFound,
+  TenantSuspended,
+} from '../domain/tenant.errors';
+import {
+  MAX_NAME_LENGTH,
+  isReservedSlug,
+  isValidName,
+  isValidSlug,
+  normalizeSlug,
+} from '../domain/tenant.rules';
+import {
+  TENANT_READER,
+  TENANT_WRITER,
+  TenantReader,
+  TenantWriter,
+} from './ports/tenant.repository';
 
 /** How long a resolved business is kept. */
 export const TENANT_CACHE_TTL_MS = 60_000;
@@ -30,8 +48,43 @@ export class TenantService {
 
   constructor(
     @Inject(TENANT_READER) private readonly reader: TenantReader,
+    @Inject(TENANT_WRITER) private readonly writer: TenantWriter,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
+
+  /** Creates a new, active business that is not the default one. */
+  async create(input: { slug: string; name: string }): Promise<Result<Tenant>> {
+    const slug = normalizeSlug(input.slug);
+    if (!isValidSlug(slug)) {
+      return err(
+        new InvalidTenantSlug(
+          'El slug debe tener de 3 a 40 caracteres: letras minúsculas, números y guiones.',
+        ),
+      );
+    }
+    if (isReservedSlug(slug)) {
+      return err(new ReservedTenantSlug(slug));
+    }
+    const name = input.name.trim();
+    if (!isValidName(name)) {
+      return err(
+        new InvalidTenantName(
+          `El nombre debe tener de 1 a ${MAX_NAME_LENGTH} caracteres.`,
+        ),
+      );
+    }
+    if (await this.reader.findBySlug(slug)) {
+      return err(new DuplicateTenantSlug(slug));
+    }
+    const saved = await this.writer.insert({
+      slug,
+      name,
+      status: 'active',
+      isDefault: false,
+      createdAt: this.clock.now(),
+    });
+    return ok(saved);
+  }
 
   /** The business of a slug. Unknown or invalid: not found. */
   async resolve(slug: string): Promise<Result<Tenant>> {

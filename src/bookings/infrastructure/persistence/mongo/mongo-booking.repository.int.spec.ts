@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import { describeBookingRepositoryContract } from '../../../application/ports/booking-repository.contract';
 import { describeBookingStatisticsContract } from '../../../application/ports/booking-statistics.contract';
@@ -54,6 +55,7 @@ describe('MongoBookingRepository', () => {
       reader: new BookingOccupiedSlotsReader(new MongoBookingRepository(model)),
       seed: async (booking) => {
         await collection.insertOne({
+          tenantId: TEST_TENANT_ID,
           professional: { id: booking.professionalId, name: 'Pro' },
           services: (booking.serviceIds ?? ['corte']).map((id) => ({
             id,
@@ -77,6 +79,7 @@ describe('MongoBookingRepository', () => {
       activity: new BookingActivityAdapter(new MongoBookingRepository(model)),
       seed: async (booking) => {
         await collection.insertOne({
+          tenantId: TEST_TENANT_ID,
           professional: { id: booking.professionalId, name: 'Pro' },
           services: booking.serviceIds.map((id) => ({
             id,

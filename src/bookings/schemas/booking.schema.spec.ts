@@ -93,7 +93,12 @@ describe('BookingSchema', () => {
 
     expect(index).toBeDefined();
     const [fields, options] = index!;
-    expect(fields).toEqual({ 'professional.id': 1, date: 1, slots: 1 });
+    expect(fields).toEqual({
+      tenantId: 1,
+      'professional.id': 1,
+      date: 1,
+      slots: 1,
+    });
     expect(options).toEqual(
       expect.objectContaining({
         unique: true,

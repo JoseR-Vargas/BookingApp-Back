@@ -127,7 +127,7 @@ BookingSchema.index({ cancelTokenHash: 1 }, { unique: true, sparse: true });
  * Cancelled bookings are not indexed, so they never block.
  */
 BookingSchema.index(
-  { 'professional.id': 1, date: 1, slots: 1 },
+  { tenantId: 1, 'professional.id': 1, date: 1, slots: 1 },
   {
     name: 'uniq_confirmed_professional_date_slot',
     unique: true,

@@ -1,3 +1,4 @@
+import { TEST_TENANT_ID } from '../../../../shared/testing/test-tenant';
 import { Connection } from 'mongoose';
 import {
   Booking,
@@ -32,6 +33,7 @@ describe('MongoOccupiedSlotsReader', () => {
       seed: async (booking) => {
         const serviceIds = booking.serviceIds ?? ['corte'];
         await collection.insertOne({
+          tenantId: TEST_TENANT_ID,
           client: { name: 'Client', phone: '+598 99 000 000' },
           services: serviceIds.map((id) => ({
             id,

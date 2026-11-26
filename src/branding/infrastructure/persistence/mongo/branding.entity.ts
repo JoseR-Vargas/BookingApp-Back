@@ -33,4 +33,4 @@ export const BrandingSchema = SchemaFactory.createForClass(BrandingRecord);
 // Every document belongs to a business, and every query is filtered by it (spec 18).
 tenantScopePlugin(BrandingSchema);
 
-BrandingSchema.index({ key: 1 }, { unique: true });
+BrandingSchema.index({ tenantId: 1, key: 1 }, { unique: true });

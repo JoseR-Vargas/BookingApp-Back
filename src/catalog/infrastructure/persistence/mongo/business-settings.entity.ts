@@ -44,4 +44,4 @@ export const BusinessSettingsSchema = SchemaFactory.createForClass(
 // Every document belongs to a business, and every query is filtered by it (spec 18).
 tenantScopePlugin(BusinessSettingsSchema);
 
-BusinessSettingsSchema.index({ key: 1 }, { unique: true });
+BusinessSettingsSchema.index({ tenantId: 1, key: 1 }, { unique: true });

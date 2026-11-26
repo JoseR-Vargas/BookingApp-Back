@@ -45,7 +45,11 @@ interface Scope {
 
 const noScope = (): Scope | undefined => {
   const scope = currentScope();
-  if (!scope) return undefined;
+  if (!scope) {
+    throw new TenantContextError(
+      'There is no business in the context: the query would read the data of every business.',
+    );
+  }
   if (scope.unscopedReason !== undefined) return undefined;
   if (!scope.tenantId) {
     throw new TenantContextError(
@@ -208,10 +212,13 @@ export function tenantScopePlugin(schema: Schema): void {
       | undefined;
     if (!scope || !documents) return;
     for (const document of documents) {
+      // The batch holds plain objects until Mongoose casts them.
       stampDocument(
-        document as {
-          get(path: string): unknown;
-          set(path: string, value: unknown): void;
+        {
+          get: (path: string) => document[path],
+          set: (path: string, value: unknown) => {
+            document[path] = value;
+          },
         },
         scope,
       );

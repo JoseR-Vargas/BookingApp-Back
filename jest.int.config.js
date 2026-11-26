@@ -10,4 +10,5 @@ module.exports = {
   transform: { '^.+\\.(t|j)s$': 'ts-jest' },
   testEnvironment: 'node',
   testTimeout: 15000,
+  setupFilesAfterEnv: ['<rootDir>/shared/testing/int-tenant-scope.setup.ts'],
 };
