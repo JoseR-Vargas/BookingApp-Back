@@ -22,6 +22,7 @@ import { GetSubscriptionStatusUseCase } from './application/use-cases/get-subscr
 import { HandlePaymentWebhookUseCase } from './application/use-cases/handle-payment-webhook.use-case';
 import { ResumeSubscriptionUseCase } from './application/use-cases/resume-subscription.use-case';
 import { StartCheckoutUseCase } from './application/use-cases/start-checkout.use-case';
+import { FakeCheckoutController } from './infrastructure/http/fake-checkout.controller';
 import { PaymentWebhookController } from './infrastructure/http/payment-webhook.controller';
 import { SubscriptionController } from './infrastructure/http/subscription.controller';
 import { selectPaymentGateway } from './infrastructure/payment/payment-gateway.factory';
@@ -47,7 +48,11 @@ import { SubscriptionPlanGate } from './infrastructure/subscription-plan-gate';
       { name: PaymentEventRecord.name, schema: PaymentEventSchema },
     ]),
   ],
-  controllers: [SubscriptionController, PaymentWebhookController],
+  controllers: [
+    SubscriptionController,
+    PaymentWebhookController,
+    FakeCheckoutController,
+  ],
   providers: [
     MongoSubscriptionRepository,
     { provide: SUBSCRIPTION_READER, useExisting: MongoSubscriptionRepository },
