@@ -3,6 +3,14 @@
 // AsyncLocalStorage store from a hook into the tests, so each hook and test
 // body is wrapped to run inside the business of the file.
 import { TEST_TENANT_ID } from './test-tenant';
+
+// The integration tests never send a real email: the mailer points at a closed local port and the
+// credentials are blanked, so nothing leaves the machine and no quota of the developer is spent.
+process.env.MAIL_FROM = '';
+process.env.GMAIL_USER = '';
+process.env.GMAIL_APP_PASSWORD = '';
+process.env.MAIL_HOST = '127.0.0.1';
+process.env.MAIL_PORT = '1';
 import { tenantScopeStorage } from '../infrastructure/tenancy/tenant-scope.storage';
 
 type Fn = (...args: unknown[]) => unknown;

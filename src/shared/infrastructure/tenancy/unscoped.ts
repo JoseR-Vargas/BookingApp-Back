@@ -1,12 +1,14 @@
 // ===== ESCAPE EXPRESO (UNSCOPED) =====
 // The only way to read or write the data of every business. It exists for
-// three operations and no more (spec 18):
+// four operations and no more (spec 18, spec 25):
 //
 //   1. the migration and the scripts;
 //   2. the lookup of a booking by its cancel token, which then continues
 //      inside the business that owns it;
 //   3. the resolution of the business itself (the `tenants` collection has no
-//      `tenantId`).
+//      `tenantId`);
+//   4. the panel of the owner of the system (spec 25): it reads across
+//      businesses because it is the owner of the installation.
 //
 // The reason is mandatory: the escape is auditable, and a test fails when a
 // new one appears outside that list.

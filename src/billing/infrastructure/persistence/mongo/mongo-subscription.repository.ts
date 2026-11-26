@@ -38,7 +38,8 @@ export class MongoSubscriptionRepository
   }
 }
 
-const toSubscription = (record: SubscriptionRecord): Subscription => ({
+/** The document of the `subscriptions` collection as the domain knows it. */
+export const toSubscription = (record: SubscriptionRecord): Subscription => ({
   planId: record.planId,
   status: record.status,
   currentPeriodEnd: record.currentPeriodEnd,

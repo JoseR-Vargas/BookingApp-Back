@@ -12,4 +12,5 @@ export const RESULT_MODULES: readonly string[] = [
   'tenancy',
   'billing',
   'reminders',
+  'platform',
 ];

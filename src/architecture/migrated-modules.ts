@@ -12,4 +12,5 @@ export const MIGRATED_MODULES: readonly string[] = [
   'tenancy',
   'billing',
   'reminders',
+  'platform',
 ];

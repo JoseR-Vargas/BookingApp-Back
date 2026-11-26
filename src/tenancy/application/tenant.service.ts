@@ -129,6 +129,14 @@ export class TenantService {
     return this.answer(found);
   }
 
+  /**
+   * Forgets the cached business: the owner of the system changed it and
+   * every request must see the change at once (spec 25).
+   */
+  invalidate(slug: string): void {
+    this.cache.delete(slug);
+  }
+
   /** A suspended business does not answer requests. */
   private answer(tenant: Tenant): Result<Tenant> {
     return tenant.status === 'suspended'

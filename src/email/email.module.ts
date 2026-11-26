@@ -18,8 +18,9 @@ import { MailerEmailSender } from './infrastructure/mailer-email-sender';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         transport: {
-          host: 'smtp.gmail.com',
-          port: 587,
+          // The host and the port come from the environment so a local SMTP (or a test) can be used.
+          host: config.get<string>('MAIL_HOST') || 'smtp.gmail.com',
+          port: Number(config.get<string>('MAIL_PORT')) || 587,
           secure: false,
           auth: {
             user: config.get<string>('GMAIL_USER'),

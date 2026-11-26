@@ -31,7 +31,10 @@ each repository, so a forgotten filter cannot leak data.
 
 0. `POST /api/signup` (spec 21) and `POST /api/webhooks/payments` (spec 23: the event names the business) are the exempt routes. Signup: it has no business until
    it creates it, then runs the rest inside the new business's scope. See
-   [signup.md](./signup.md).
+   [signup.md](./signup.md). The routes of the owner of the system
+   (`/api/platform/*`, spec 25) are exempt too: they read across businesses,
+   they have no business of their own and they must answer even when the
+   default business is suspended. See [platform.md](./platform.md).
 1. `TenantMiddleware` reads the `X-Tenant` header. No header means the default
    business. Unknown or invalid slug: `404 Negocio no encontrado`. Suspended:
    `403 Este negocio no está disponible.`
@@ -42,7 +45,8 @@ each repository, so a forgotten filter cannot leak data.
    every saved document. A query that names another tenant, or that runs with
    no scope at all, throws `TenantContextError`: it fails closed.
 4. `unscoped(reason, fn)` is the only escape. Use it for the migration, the
-   scripts and the tenant resolution itself.
+   scripts, the tenant resolution itself and the panel of the owner of the
+   system (spec 25), which reads across businesses.
 
 Domain and application code never see the tenant: only adapters do.
 

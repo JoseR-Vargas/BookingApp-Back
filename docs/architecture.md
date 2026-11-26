@@ -141,7 +141,19 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   the business live in the `tenants` collection and its ports are in `tenancy`. See
   [reminders.md](./reminders.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
 
-Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth', 'signup', 'tenancy', 'billing', 'reminders']`.
+- `platform` (spec 25: the panel of the owner of the system): domain rules (which actions of the
+  owner are valid and the Spanish message of every refusal), ports `PlatformUsageReader` (the
+  bookings of every business, counted), `PlatformMetricsCache` (the metrics of the installation,
+  kept a minute in memory), `PlatformAudit` (the log of the manual changes) and
+  `PlatformCredentials` (the key of the owner, compared in constant time), the reader of the
+  signals of the businesses and one use case per action (list, detail, metrics, suspend,
+  reactivate, extend the trial, change the plan by hand). The routes live under
+  `/api/platform/*` with their own key (`PLATFORM_API_KEY`, never the admin key of a business)
+  and their own guard, and they are exempt from the middleware of the business: they read across
+  businesses through the explicit `unscoped` escape and never read the data of a client. See
+  [platform.md](./platform.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
+
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth', 'signup', 'tenancy', 'billing', 'reminders', 'platform']`.
 
 Temporary ports (they read data owned by a module that has not migrated yet):
 

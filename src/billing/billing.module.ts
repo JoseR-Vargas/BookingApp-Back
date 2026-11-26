@@ -11,6 +11,8 @@ import { TenancyModule } from '../tenancy/tenancy.module';
 import { PAYMENT_EVENT_LOG } from './application/ports/payment-event-log.port';
 import { PAYMENT_GATEWAY } from './application/ports/payment-gateway.port';
 import { PLAN_USAGE_READER } from './application/ports/plan-usage.reader';
+import { SUBSCRIPTION_DIRECTORY } from './application/ports/subscription-directory.port';
+import { SUBSCRIPTION_ADMINISTRATOR } from './application/ports/subscription-administrator.port';
 import {
   SUBSCRIPTION_READER,
   SUBSCRIPTION_WRITER,
@@ -29,6 +31,8 @@ import { selectPaymentGateway } from './infrastructure/payment/payment-gateway.f
 import { MongoPaymentEventLog } from './infrastructure/persistence/mongo/mongo-payment-event.log';
 import { MongoPlanUsageReader } from './infrastructure/persistence/mongo/mongo-plan-usage.reader';
 import { MongoSubscriptionRepository } from './infrastructure/persistence/mongo/mongo-subscription.repository';
+import { MongoSubscriptionDirectory } from './infrastructure/persistence/mongo/mongo-subscription-directory';
+import { MongoSubscriptionAdministrator } from './infrastructure/persistence/mongo/mongo-subscription-administrator';
 import {
   PaymentEventRecord,
   PaymentEventSchema,
@@ -59,6 +63,13 @@ import { SubscriptionPlanGate } from './infrastructure/subscription-plan-gate';
     { provide: SUBSCRIPTION_WRITER, useExisting: MongoSubscriptionRepository },
     { provide: PAYMENT_EVENT_LOG, useClass: MongoPaymentEventLog },
     { provide: PLAN_USAGE_READER, useClass: MongoPlanUsageReader },
+    // The owner of the system reads every subscription and changes one by
+    // hand (spec 25).
+    { provide: SUBSCRIPTION_DIRECTORY, useClass: MongoSubscriptionDirectory },
+    {
+      provide: SUBSCRIPTION_ADMINISTRATOR,
+      useClass: MongoSubscriptionAdministrator,
+    },
     // PAYMENT_GATEWAY picks the adapter (default `fake`); a bad value throws here.
     {
       provide: PAYMENT_GATEWAY,
@@ -75,6 +86,11 @@ import { SubscriptionPlanGate } from './infrastructure/subscription-plan-gate';
     HandlePaymentWebhookUseCase,
     SubscriptionPlanGate,
   ],
-  exports: [PLAN_GATE, GetSubscriptionStatusUseCase],
+  exports: [
+    PLAN_GATE,
+    GetSubscriptionStatusUseCase,
+    SUBSCRIPTION_DIRECTORY,
+    SUBSCRIPTION_ADMINISTRATOR,
+  ],
 })
 export class BillingModule {}

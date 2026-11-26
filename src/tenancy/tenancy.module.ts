@@ -31,6 +31,8 @@ import {
 import { TENANT_BOOKING_COUNTER } from './application/ports/tenant-booking-counter.port';
 import { TENANT_ERASER } from './application/ports/tenant-eraser.port';
 import { TENANT_STORAGE_METER } from './application/ports/tenant-storage-meter.port';
+import { TENANT_LIFECYCLE_WRITER } from './application/ports/tenant-lifecycle.port';
+import { TENANT_CACHE_INVALIDATOR } from './application/ports/tenant-cache.port';
 import { TENANT_STORAGE_STORE } from './application/ports/tenant-storage-store.port';
 import { GetStorageStatusUseCase } from './application/use-cases/get-storage-status.use-case';
 import { STORAGE_GATE } from '../shared/application/storage-gate.port';
@@ -50,6 +52,7 @@ import { MongoTenantEraser } from './infrastructure/persistence/mongo/mongo-tena
 import { MongoTenantRepository } from './infrastructure/persistence/mongo/mongo-tenant.repository';
 import { MongoTenantDirectory } from './infrastructure/persistence/mongo/mongo-tenant-directory';
 import { MongoTenantReminders } from './infrastructure/persistence/mongo/mongo-tenant-reminders';
+import { MongoTenantLifecycle } from './infrastructure/persistence/mongo/mongo-tenant-lifecycle';
 
 /**
  * The businesses come first: the migration creates the default one and stamps
@@ -86,6 +89,9 @@ class TenantBootstrap implements OnModuleInit {
     { provide: TENANT_STORAGE_METER, useClass: MongoTenantStorageMeter },
     { provide: STORAGE_GATE, useClass: TenancyStorageGate },
     { provide: TENANT_BOOKING_COUNTER, useClass: MongoTenantBookingCounter },
+    // The manual changes of the owner of the system (spec 25).
+    { provide: TENANT_LIFECYCLE_WRITER, useClass: MongoTenantLifecycle },
+    { provide: TENANT_CACHE_INVALIDATOR, useExisting: TenantService },
     { provide: TENANT_SCOPE, useClass: AsyncLocalStorageTenantContext },
     { provide: TENANT_CONTEXT, useExisting: TENANT_SCOPE },
     { provide: CLOCK, useClass: SystemClock },
@@ -106,6 +112,8 @@ class TenantBootstrap implements OnModuleInit {
     TENANT_SCOPE,
     TENANT_CONTEXT,
     TENANT_ERASER,
+    TENANT_LIFECYCLE_WRITER,
+    TENANT_CACHE_INVALIDATOR,
     TenantService,
     GetTrialStatusUseCase,
     GetStorageStatusUseCase,
@@ -121,6 +129,10 @@ export class TenancyModule implements NestModule {
    * rest of the request runs inside its scope. Two routes are exempt: `POST
    * /api/signup` (spec 21: it creates the business and opens the scope itself)
    * and `POST /api/webhooks/payments` (spec 23: the event names the business).
+   *
+   * The panel of the owner of the system is exempt too (spec 25): it reads
+   * across businesses, it has no business of its own and it must answer even
+   * when the default business is suspended.
    */
   configure(consumer: MiddlewareConsumer): void {
     consumer
@@ -130,6 +142,13 @@ export class TenancyModule implements NestModule {
         { path: 'signup', method: RequestMethod.POST },
         // The gateway's webhook has no business header: the event names it (spec 23).
         { path: 'webhooks/payments', method: RequestMethod.POST },
+        // The panel of the owner of the system (spec 25). The exclusion is
+        // compared with the URL of the request, so the path carries the global
+        // prefix (`/api`); the second form covers an application without it.
+        { path: 'api/platform/(.*)', method: RequestMethod.ALL },
+        { path: 'api/platform', method: RequestMethod.ALL },
+        { path: 'platform/(.*)', method: RequestMethod.ALL },
+        { path: 'platform', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }
