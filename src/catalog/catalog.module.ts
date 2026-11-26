@@ -13,6 +13,7 @@ import { invalidatingWriter } from '../shared/infrastructure/cache/invalidating-
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
 import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
+import { BillingModule } from '../billing/billing.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { LEGACY_SCHEDULE_READER } from './application/ports/legacy-schedule.reader';
 import { LOCATION_READER } from './application/ports/location.reader';
@@ -100,6 +101,8 @@ const optionalInvalidator = { token: AVAILABILITY_INVALIDATOR, optional: true };
   imports: [
     // The seeding runs in the default business (spec 18).
     TenancyModule,
+    // The plan gate of professionals and locations (spec 23).
+    BillingModule,
     MongooseModule.forFeature([
       { name: ProfessionalRecord.name, schema: ProfessionalSchema },
       { name: ServiceRecord.name, schema: ServiceSchema },

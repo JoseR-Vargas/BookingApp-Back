@@ -13,7 +13,9 @@ export type DomainErrorKind =
    * programming error of the server, never a business failure of the request,
    * so it answers 500.
    */
-  | 'tenant';
+  | 'tenant'
+  /** The caller proves nothing valid (a webhook with a bad signature, spec 23). */
+  | 'unauthorized';
 
 /**
  * Base class of every error a business rule can raise. It extends `Error`

@@ -12,6 +12,9 @@ import { BotHandler } from './bot/bot.handler';
 import { ConversationState } from './schemas/conversation-state.schema';
 import { TenantRecord } from '../tenancy/infrastructure/persistence/mongo/tenant.entity';
 import { TenantMigration } from '../tenancy/infrastructure/migration/tenant-migration';
+import { SubscriptionRecord } from '../billing/infrastructure/persistence/mongo/subscription.entity';
+import { PaymentEventRecord } from '../billing/infrastructure/persistence/mongo/payment-event.entity';
+import { PLAN_USAGE_READER } from '../billing/application/ports/plan-usage.reader';
 import { ProcessedMessage } from './schemas/processed-message.schema';
 import { AdminBookingNotifier } from './admin-booking.notifier';
 import { BOOKING_NOTIFIER } from '../bookings/application/ports/booking-notifier.port';
@@ -54,6 +57,12 @@ describe('WhatsappModule wiring (no WHATSAPP_* / BUSINESS_TIMEZONE env)', () => 
       .overrideProvider(getModelToken(ConversationState.name))
       .useValue({})
       .overrideProvider(getModelToken(TenantRecord.name))
+      .useValue({})
+      .overrideProvider(getModelToken(SubscriptionRecord.name))
+      .useValue({})
+      .overrideProvider(getModelToken(PaymentEventRecord.name))
+      .useValue({})
+      .overrideProvider(PLAN_USAGE_READER)
       .useValue({})
       // The migration needs a database connection; this module boots without one.
       .overrideProvider(TenantMigration)

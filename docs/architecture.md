@@ -128,7 +128,9 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   MongoDB adapters that pass the same contract suites, and the guard that accepts the session
   cookie or the legacy key. See [admin-accounts.md](./admin-accounts.md).
 
-Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth']`.
+- `billing` (spec 23: plans, subscription state machine, plan limits, payment gateway port with a fake adapter, signed idempotent webhook): see [billing.md](./billing.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
+
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth', 'signup', 'tenancy', 'billing']`.
 
 Temporary ports (they read data owned by a module that has not migrated yet):
 

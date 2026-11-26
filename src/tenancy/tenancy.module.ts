@@ -101,14 +101,19 @@ class TenantBootstrap implements OnModuleInit {
 export class TenancyModule implements NestModule {
   /**
    * Every request belongs to a business (spec 18): the header names it and the
-   * rest of the request runs inside its scope. Only `POST /api/signup` is
-   * exempt (spec 21): it creates the business and opens the scope itself.
+   * rest of the request runs inside its scope. Two routes are exempt: `POST
+   * /api/signup` (spec 21: it creates the business and opens the scope itself)
+   * and `POST /api/webhooks/payments` (spec 23: the event names the business).
    */
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(TenantMiddleware)
       // The signup creates its business: it has none until then (spec 21).
-      .exclude({ path: 'signup', method: RequestMethod.POST })
+      .exclude(
+        { path: 'signup', method: RequestMethod.POST },
+        // The gateway's webhook has no business header: the event names it (spec 23).
+        { path: 'webhooks/payments', method: RequestMethod.POST },
+      )
       .forRoutes('*');
   }
 }

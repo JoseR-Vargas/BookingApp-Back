@@ -13,6 +13,7 @@ import { AdminModule } from './admin/admin.module';
 import { BrandingModule } from './branding/branding.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { SignupModule } from './signup/signup.module';
+import { BillingModule } from './billing/billing.module';
 import { AvailabilityCacheModule } from './availability/infrastructure/cache/availability-cache.module';
 import { PublicRateLimitModule } from './shared/infrastructure/rate-limit/public-rate-limit.module';
 
@@ -34,6 +35,7 @@ import { PublicRateLimitModule } from './shared/infrastructure/rate-limit/public
     BrandingModule,
     TenancyModule,
     SignupModule,
+    BillingModule,
     PublicRateLimitModule,
     AvailabilityCacheModule,
   ],

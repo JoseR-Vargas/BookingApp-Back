@@ -11,7 +11,9 @@ each repository, so a forgotten filter cannot leak data.
   (`trialEndsAt`, `bookingQuota`; both `null` = no trial). It has no `tenantId`.
 - Scoped collections: `professionals`, `services`, `locations`,
   `business_settings`, `branding`, `bookings`, `admin_users`, `admin_sessions`
-  (spec 20, see [admin-accounts.md](./admin-accounts.md)). Each declares
+  (spec 20, see [admin-accounts.md](./admin-accounts.md)) and `subscriptions`
+  (spec 23, see [billing.md](./billing.md); `payment_events` is the one global exception).
+  Each declares
   `tenantId: ObjectId` and applies `tenantScopePlugin`.
 - Unique indexes start with `tenantId` (`{tenantId, id}`, `{tenantId, key}`,
   and the booking slot index `{tenantId, professional.id, date, slots}`), so
@@ -27,7 +29,7 @@ each repository, so a forgotten filter cannot leak data.
 
 ## Request flow
 
-0. `POST /api/signup` is the one exempt route (spec 21): it has no business until
+0. `POST /api/signup` (spec 21) and `POST /api/webhooks/payments` (spec 23: the event names the business) are the exempt routes. Signup: it has no business until
    it creates it, then runs the rest inside the new business's scope. See
    [signup.md](./signup.md).
 1. `TenantMiddleware` reads the `X-Tenant` header. No header means the default

@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { DomainError } from '../shared/domain/domain-error';
 import { Result } from '../shared/domain/result';
@@ -50,6 +51,7 @@ const TO_HTTP: Record<DomainError['kind'], (message: string) => HttpException> =
     forbidden: (message) => new ForbiddenException(message),
     unavailable: (message) => new ServiceUnavailableException(message),
     tenant: (message) => new InternalServerErrorException(message),
+    unauthorized: (message) => new UnauthorizedException(message),
   };
 
 /**

@@ -31,6 +31,8 @@ export const SCOPED_COLLECTIONS = [
   'bookings',
   'admin_users',
   'admin_sessions',
+  // One subscription per business (spec 23). `payment_events` is NOT here: it is global.
+  'subscriptions',
 ] as const;
 
 /** The name of the unique index that keeps a confirmed booking alone. */
@@ -122,6 +124,20 @@ export const INDEX_PLANS: readonly IndexPlan[] = [
     // cannot be compound, so it is the one index without `tenantId`.
     collection: 'admin_sessions',
     create: { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
+  },
+  // Plans and billing (spec 23): one subscription per business.
+  {
+    collection: 'subscriptions',
+    create: { key: { tenantId: 1 }, options: { unique: true } },
+  },
+  {
+    collection: 'subscriptions',
+    create: { key: { tenantId: 1, status: 1 } },
+  },
+  // The global idempotency log of the gateway events: not tenant-scoped.
+  {
+    collection: 'payment_events',
+    create: { key: { externalEventId: 1 }, options: { unique: true } },
   },
 ];
 

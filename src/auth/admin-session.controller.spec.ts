@@ -2,6 +2,8 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { AdminKeyGuard } from './admin-key.guard';
 import { ok } from '../shared/domain/result';
 import { GetTrialStatusUseCase } from '../tenancy/application/use-cases/get-trial-status.use-case';
+import { GetSubscriptionStatusUseCase } from '../billing/application/use-cases/get-subscription-status.use-case';
+import { PlanStatus } from '../billing/domain/plan-status';
 import { GetStorageStatusUseCase } from '../tenancy/application/use-cases/get-storage-status.use-case';
 import { StorageStatus } from '../tenancy/domain/storage.rules';
 import { TrialStatus } from '../tenancy/domain/trial.rules';
@@ -143,5 +145,84 @@ describe('AdminSessionController storage (spec 22)', () => {
       controller.getSession({ headers: {}, adminActor: { kind: 'key' } }),
     ).toEqual({ ok: true });
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminSessionController plan (spec 23)', () => {
+  const planOf = (status: PlanStatus | null) =>
+    ({
+      execute: () => Promise.resolve(ok(status)),
+    }) as GetSubscriptionStatusUseCase;
+  const asAccount = {
+    headers: {},
+    adminActor: { kind: 'session', user },
+  } as const;
+  const end = new Date('2026-12-25T10:00:00Z');
+
+  it('answers plan: null for an account of a business without a subscription', async () => {
+    const controller = new AdminSessionController(
+      trialOf(null),
+      undefined,
+      planOf(null),
+    );
+    await expect(controller.getSession(asAccount)).resolves.toMatchObject({
+      ok: true,
+      plan: null,
+    });
+  });
+
+  it('answers the plan, its state, its limits and its usage', async () => {
+    const controller = new AdminSessionController(
+      trialOf(null),
+      undefined,
+      planOf({
+        planId: 'pro',
+        status: 'past_due',
+        currentPeriodEnd: end,
+        cancelAtPeriodEnd: true,
+        limits: {
+          professionals: 3,
+          locations: 2,
+          bookingsPerMonth: 500,
+          publicPage: true,
+          reminders: true,
+        },
+        usage: { professionals: 2, locations: 1, bookingsThisMonth: 40 },
+      }),
+    );
+    const body = await controller.getSession(asAccount);
+    expect(body).toMatchObject({
+      plan: {
+        planId: 'pro',
+        status: 'past_due',
+        currentPeriodEnd: end.toISOString(),
+        cancelAtPeriodEnd: true,
+        limits: {
+          professionals: 3,
+          locations: 2,
+          bookingsPerMonth: 500,
+          publicPage: true,
+          reminders: true,
+        },
+        usage: { professionals: 2, locations: 1, bookingsThisMonth: 40 },
+      },
+    });
+  });
+
+  it('keeps the key answer exactly { ok: true }, with no plan lookup', () => {
+    const execute = jest.fn();
+    const controller = new AdminSessionController(undefined, undefined, {
+      execute,
+    } as unknown as GetSubscriptionStatusUseCase);
+    expect(
+      controller.getSession({ headers: {}, adminActor: { kind: 'key' } }),
+    ).toEqual({ ok: true });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('leaves the plan out where the use case is not wired (as storage)', async () => {
+    const controller = new AdminSessionController(trialOf(null));
+    const body = await controller.getSession(asAccount);
+    expect(body).not.toHaveProperty('plan');
   });
 });

@@ -9,6 +9,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { DomainError, DomainErrorKind } from '../../domain/domain-error';
@@ -20,6 +21,7 @@ const TO_HTTP: Record<DomainErrorKind, (message: string) => HttpException> = {
   forbidden: (message) => new ForbiddenException(message),
   unavailable: (message) => new ServiceUnavailableException(message),
   tenant: (message) => new InternalServerErrorException(message),
+  unauthorized: (message) => new UnauthorizedException(message),
 };
 
 /**

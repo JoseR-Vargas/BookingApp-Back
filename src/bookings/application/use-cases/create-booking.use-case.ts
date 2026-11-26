@@ -1,5 +1,9 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
+  PLAN_GATE,
+  PlanGate,
+} from '../../../shared/application/plan-gate.port';
+import {
   STORAGE_GATE,
   StorageGate,
 } from '../../../shared/application/storage-gate.port';
@@ -45,7 +49,8 @@ export interface CreateBookingInput extends BookingRequest {
  * Creates a confirmed booking. Everything but the client data is derived from
  * the catalog; the cancel token is returned once and only its hash is stored.
  * A business whose free trial is over answers `TrialLimitReached` first, and
- * one over its storage quota answers `StorageLimitReached` (spec 22).
+ * one over its storage quota answers `StorageLimitReached` (spec 22). A business
+ * with a subscription answers to its plan instead of the trial (spec 23).
  * Duplicates per client are NOT checked: a client may book with different
  * professionals at the same time.
  */
@@ -61,11 +66,18 @@ export class CreateBookingUseCase {
     @Optional()
     @Inject(STORAGE_GATE)
     private readonly storage?: StorageGate,
+    // The plan of the business, when it has a subscription (spec 23).
+    @Optional() @Inject(PLAN_GATE) private readonly plans?: PlanGate,
   ) {}
 
   async execute(input: CreateBookingInput): Promise<Result<CreatedBooking>> {
-    // A business whose trial is over takes no new bookings (spec 21).
-    if (!(await this.trial.allowsNewBookings())) {
+    // A subscription governs the business (spec 23): its limits and its end
+    // answer first, and a business that pays is not blocked by its old trial.
+    const plan = await this.plans?.check('booking');
+    if (plan && !plan.ok) return plan;
+    const governedByPlan = plan?.value.governs === true;
+    // Otherwise a business whose trial is over takes no new bookings (spec 21).
+    if (!governedByPlan && !(await this.trial.allowsNewBookings())) {
       return err(new TrialLimitReached());
     }
     // ...nor does a business over its storage quota (spec 22).

@@ -17,6 +17,7 @@ import { ListAdminUsersUseCase } from './application/use-cases/list-admin-users.
 import { LoginAdminUseCase } from './application/use-cases/login-admin.use-case';
 import { LogoutAdminUseCase } from './application/use-cases/logout-admin.use-case';
 import { RotateAdminPasswordUseCase } from './application/use-cases/rotate-admin-password.use-case';
+import { BillingModule } from '../billing/billing.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { NodeSessionTokens } from './infrastructure/crypto/node-session-tokens';
 import { ScryptPasswordHasher } from './infrastructure/crypto/scrypt-password-hasher';
@@ -43,6 +44,8 @@ import { MongoAdminUserRepository } from './infrastructure/persistence/mongo/mon
   imports: [
     // The session answers the trial of the business (spec 21).
     TenancyModule,
+    // ... and its plan (spec 23).
+    BillingModule,
     MongooseModule.forFeature([
       { name: AdminUserRecord.name, schema: AdminUserSchema },
       { name: AdminSessionRecord.name, schema: AdminSessionSchema },

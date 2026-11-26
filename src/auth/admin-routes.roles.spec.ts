@@ -9,6 +9,7 @@ import { ProfessionalsAdminController } from '../catalog/infrastructure/http/pro
 import { PublicAvailabilityAdminController } from '../catalog/infrastructure/http/public-availability-admin.controller';
 import { ScheduleAdminController } from '../catalog/infrastructure/http/schedule-admin.controller';
 import { ServicesAdminController } from '../catalog/infrastructure/http/services-admin.controller';
+import { SubscriptionController } from '../billing/infrastructure/http/subscription.controller';
 import { AdminKeyGuard } from './admin-key.guard';
 import { AdminSessionController } from './admin-session.controller';
 import { AdminUsersController } from './infrastructure/http/admin-users.controller';
@@ -58,6 +59,7 @@ describe('roles of the admin routes', () => {
     ['public availability', PublicAvailabilityAdminController],
     ['branding', BrandingAdminController],
     ['user administration', AdminUsersController],
+    ['subscription (spec 23)', SubscriptionController],
   ])('%s: every route is owner only', (_name, controller) => {
     const roles = Object.values(guardedRoutes(controller as Ctor));
     expect(roles.length).toBeGreaterThan(0);

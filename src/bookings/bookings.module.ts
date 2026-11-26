@@ -23,6 +23,7 @@ import { GetStatisticsUseCase } from './application/use-cases/get-statistics.use
 import { ListBookingsUseCase } from './application/use-cases/list-bookings.use-case';
 import { UpdateBookingUseCase } from './application/use-cases/update-booking.use-case';
 import { BookingsService } from './bookings.service';
+import { BillingModule } from '../billing/billing.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { BookingsGateway } from './bookings.gateway';
 import { NodeCancelTokens } from './infrastructure/crypto/node-cancel-tokens';
@@ -65,6 +66,8 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     EmailModule,
     CatalogModule,
     TenancyModule,
+    // The plan gate of new bookings (spec 23).
+    BillingModule,
     // Outbound only; WhatsappModule imports BookingsModule, never the reverse.
     WhatsappApiModule,
   ],
