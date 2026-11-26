@@ -16,6 +16,7 @@ import { SignupModule } from './signup/signup.module';
 import { BillingModule } from './billing/billing.module';
 import { AvailabilityCacheModule } from './availability/infrastructure/cache/availability-cache.module';
 import { PublicRateLimitModule } from './shared/infrastructure/rate-limit/public-rate-limit.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PublicRateLimitModule } from './shared/infrastructure/rate-limit/public
     BillingModule,
     PublicRateLimitModule,
     AvailabilityCacheModule,
+    RemindersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -139,6 +139,8 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     BOOKING_WRITER,
     BOOKING_ACTIVITY_READER,
     BOOKING_STATISTICS_READER,
+    // The reminders of spec 24 build the link that cancels a booking.
+    CANCEL_TOKENS,
   ],
 })
 export class BookingsModule {}

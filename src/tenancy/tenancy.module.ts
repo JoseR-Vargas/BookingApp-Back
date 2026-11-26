@@ -23,6 +23,11 @@ import {
   TENANT_READER,
   TENANT_WRITER,
 } from './application/ports/tenant.repository';
+import { TENANT_DIRECTORY } from './application/ports/tenant-directory.port';
+import {
+  TENANT_REMINDERS_READER,
+  TENANT_REMINDERS_WRITER,
+} from './application/ports/tenant-reminders.port';
 import { TENANT_BOOKING_COUNTER } from './application/ports/tenant-booking-counter.port';
 import { TENANT_ERASER } from './application/ports/tenant-eraser.port';
 import { TENANT_STORAGE_METER } from './application/ports/tenant-storage-meter.port';
@@ -43,6 +48,8 @@ import {
 import { MongoTenantBookingCounter } from './infrastructure/persistence/mongo/mongo-tenant-booking-counter';
 import { MongoTenantEraser } from './infrastructure/persistence/mongo/mongo-tenant-eraser';
 import { MongoTenantRepository } from './infrastructure/persistence/mongo/mongo-tenant.repository';
+import { MongoTenantDirectory } from './infrastructure/persistence/mongo/mongo-tenant-directory';
+import { MongoTenantReminders } from './infrastructure/persistence/mongo/mongo-tenant-reminders';
 
 /**
  * The businesses come first: the migration creates the default one and stamps
@@ -67,6 +74,13 @@ class TenantBootstrap implements OnModuleInit {
   providers: [
     { provide: TENANT_READER, useClass: MongoTenantRepository },
     { provide: TENANT_WRITER, useClass: MongoTenantRepository },
+    // The reminders of the business (spec 24) and the list of the businesses
+    // the scheduler of the reminders walks.
+    { provide: TENANT_REMINDERS_READER, useExisting: MongoTenantReminders },
+    { provide: TENANT_REMINDERS_WRITER, useExisting: MongoTenantReminders },
+    { provide: TENANT_DIRECTORY, useClass: MongoTenantDirectory },
+    MongoTenantReminders,
+    MongoTenantDirectory,
     { provide: TENANT_ERASER, useClass: MongoTenantEraser },
     { provide: TENANT_STORAGE_STORE, useClass: MongoTenantRepository },
     { provide: TENANT_STORAGE_METER, useClass: MongoTenantStorageMeter },
@@ -86,6 +100,9 @@ class TenantBootstrap implements OnModuleInit {
   exports: [
     TENANT_READER,
     TENANT_WRITER,
+    TENANT_DIRECTORY,
+    TENANT_REMINDERS_READER,
+    TENANT_REMINDERS_WRITER,
     TENANT_SCOPE,
     TENANT_CONTEXT,
     TENANT_ERASER,

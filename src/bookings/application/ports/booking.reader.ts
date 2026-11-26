@@ -11,6 +11,12 @@ export interface BookingReader {
   /** The booking whose cancel token has this hash. */
   findByCancelTokenHash(hash: string): Promise<Booking | null>;
   /**
+   * The bookings of the business whose day is between the two dates
+   * ('YYYY-MM-DD', both included). The days are the wall clock of the
+   * business, the same the booking stores.
+   */
+  findByDateRange(fromDate: string, toDate: string): Promise<Booking[]>;
+  /**
    * The slots blocked by the non-cancelled bookings of a professional on a
    * day, leaving out the booking `excludeId` (the one being edited).
    */

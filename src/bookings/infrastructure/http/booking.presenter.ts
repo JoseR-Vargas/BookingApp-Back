@@ -4,6 +4,7 @@
 // the persistence layer leaking into the response.
 
 import { Booking } from '../../domain/booking';
+import { ReminderRecord } from '../../../shared/domain/reminders';
 
 type Json = Record<string, unknown>;
 
@@ -33,7 +34,21 @@ export function toBookingJson(booking: Booking): Json {
     status: booking.status,
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
+    // The reminders that were sent for this booking (spec 24).
+    reminders: (booking.reminders ?? []).map(toReminderJson),
     __v: booking.storage?.version,
+  };
+}
+
+/** One entry of the log of reminders, as the panel reads it. */
+export function toReminderJson(reminder: ReminderRecord): Json {
+  return {
+    kind: reminder.kind,
+    channel: reminder.channel,
+    sentAt: reminder.sentAt,
+    ok: reminder.ok,
+    error: reminder.error ?? null,
+    attempts: reminder.attempts,
   };
 }
 

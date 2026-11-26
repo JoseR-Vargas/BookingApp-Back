@@ -42,6 +42,7 @@ export function toDomain(record: BookingRecord | Plain): Booking {
     status: plain.status,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,
+    reminders: plain.reminders as Booking['reminders'],
     storage: {
       version: plain.__v,
       clientKey: keyOf(clientKey),

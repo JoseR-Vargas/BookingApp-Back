@@ -5,6 +5,10 @@ import {
   BookedService,
   BookingStatus,
 } from '../../../domain/booking';
+import {
+  REMINDER_CHANNELS,
+  ReminderRecord,
+} from '../../../../shared/domain/reminders';
 import { tenantScopePlugin } from '../../../../shared/infrastructure/mongo/tenant-scope.plugin';
 import { Types } from 'mongoose';
 
@@ -107,6 +111,34 @@ export class Booking extends Document {
    */
   @Prop({ type: String, select: false })
   cancelTokenHash?: string;
+
+  /**
+   * The reminders that were sent for this booking (spec 24): one entry per
+   * window and channel, with the attempts it took and why it failed.
+   */
+  @Prop({
+    type: [
+      {
+        _id: false,
+        kind: { type: String, required: true },
+        channel: { type: String, required: true, enum: REMINDER_CHANNELS },
+        sentAt: { type: Date, required: true },
+        ok: { type: Boolean, required: true },
+        error: { type: String, required: false },
+        attempts: { type: Number, required: true, default: 1 },
+      },
+    ],
+    required: false,
+  })
+  reminders?: ReminderRecord[];
+
+  /**
+   * The digest of the secret the reminder carries, so the cancel link of a
+   * reminder cancels this booking and only this one (spec 24). Queries never
+   * return it (`select: false`).
+   */
+  @Prop({ type: String, select: false })
+  reminderCancelTokenHash?: string;
 
   /** The business this document belongs to (spec 18). */
   @Prop({ type: Types.ObjectId, required: false, index: true })

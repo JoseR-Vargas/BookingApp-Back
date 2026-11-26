@@ -1,6 +1,32 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { ObjectId } from 'mongoose';
 import { TenantStatus } from '../../../domain/tenant';
+import {
+  DEFAULT_REMINDER_HOURS_BEFORE,
+  DEFAULT_REMINDER_TEMPLATE,
+  REMINDER_CHANNELS,
+  ReminderChannel,
+} from '../../../../shared/domain/reminders';
+
+/** The reminder settings of a business (spec 24). */
+@Schema({ _id: false })
+export class TenantReminderSettings {
+  @Prop({ type: Boolean, default: true })
+  enabled: boolean;
+
+  @Prop({
+    type: [String],
+    enum: REMINDER_CHANNELS,
+    default: ['whatsapp', 'email'],
+  })
+  channels: ReminderChannel[];
+
+  @Prop({ type: [Number], default: [...DEFAULT_REMINDER_HOURS_BEFORE] })
+  hoursBefore: number[];
+
+  @Prop({ type: String, default: DEFAULT_REMINDER_TEMPLATE })
+  template: string;
+}
 
 /** A business stored in the `tenants` collection. */
 @Schema({ collection: 'tenants', versionKey: false })
@@ -45,6 +71,13 @@ export class TenantRecord {
   /** When the size was last measured; null (or absent) means never. */
   @Prop({ type: Date, default: null })
   storageMeasuredAt: Date | null;
+
+  /**
+   * How the business wants its reminders (spec 24). Absent on the businesses
+   * made before it: they get the defaults.
+   */
+  @Prop({ type: TenantReminderSettings, required: false })
+  reminders?: TenantReminderSettings;
 }
 
 export const TenantSchema = SchemaFactory.createForClass(TenantRecord);

@@ -2,6 +2,8 @@
 // The business a document belongs to. The domain of the other modules never
 // knows it (spec 18): only the adapters of the persistence ask for it.
 
+import { ReminderSettings } from '../../shared/domain/reminders';
+
 /** Whether the business answers requests. */
 export type TenantStatus = 'active' | 'suspended';
 
@@ -29,6 +31,8 @@ export interface Tenant {
   storageUsedBytes: number;
   /** When the size was last measured; null when never. */
   storageMeasuredAt: Date | null;
+  /** How the business wants its reminders (spec 24); absent means "the defaults". */
+  reminders?: ReminderSettings;
 }
 
 /** A business that does not exist yet. */

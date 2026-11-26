@@ -40,6 +40,13 @@ import { MailerEmailSender } from './infrastructure/mailer-email-sender';
     SendWelcomeEmailUseCase,
     EmailService,
   ],
-  exports: [EmailService, SendWelcomeEmailUseCase],
+  exports: [
+    EmailService,
+    SendWelcomeEmailUseCase,
+    // The reminders of spec 24 send through the same mailer and build their
+    // links with the same public URL.
+    EMAIL_SENDER,
+    PUBLIC_APP_URL,
+  ],
 })
 export class EmailModule {}

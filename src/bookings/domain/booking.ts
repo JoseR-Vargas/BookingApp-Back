@@ -1,3 +1,5 @@
+import { ReminderRecord } from '../../shared/domain/reminders';
+
 export const BOOKING_STATUSES = ['confirmed', 'cancelled'] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
@@ -56,6 +58,12 @@ export interface Booking {
   createdAt?: Date;
   updatedAt?: Date;
   storage?: BookingStorageMeta;
+  /**
+   * The reminders that were sent for this booking (spec 24): one entry per
+   * window and channel, with the attempts it took. Absent when the booking
+   * has never been reminded.
+   */
+  reminders?: ReminderRecord[];
 }
 
 /** A booking ready to be stored (the store gives it an id and its timestamps). */

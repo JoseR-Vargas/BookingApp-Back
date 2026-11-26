@@ -1,4 +1,5 @@
 import { DomainError } from '../../../shared/domain/domain-error';
+import { ReminderRecord } from '../../../shared/domain/reminders';
 import { Booking, NewBooking } from '../../domain/booking';
 import { BookingReader } from './booking.reader';
 import { BookingWriter } from './booking.writer';
@@ -43,6 +44,16 @@ export const newBooking = (
 
 let hashCounter = 0;
 const nextHash = () => `hash-${Date.now()}-${++hashCounter}`;
+
+/** One entry of the log of reminders of a booking (spec 24). */
+const reminder = (over: Partial<ReminderRecord> = {}): ReminderRecord => ({
+  kind: '24h',
+  channel: 'whatsapp',
+  sentAt: new Date('2026-03-24T10:00:00Z'),
+  ok: true,
+  attempts: 1,
+  ...over,
+});
 
 /**
  * Behavior every BookingReader + BookingWriter adapter must honor: what is
@@ -351,6 +362,95 @@ export function describeBookingRepositoryContract(
         await store();
 
         await expect(reader.findOccupiedSlots(DAY, '$ne')).resolves.toEqual([]);
+      });
+    });
+
+    describe('the log of reminders', () => {
+      it('starts without reminders and keeps the ones it is given', async () => {
+        const created = await store();
+
+        expect(created.reminders ?? []).toEqual([]);
+
+        const saved = await writer.saveReminders(created.id, [
+          reminder(),
+          reminder({
+            kind: '3h',
+            channel: 'email',
+            ok: false,
+            error: 'smtp down',
+            attempts: 2,
+          }),
+        ]);
+
+        expect(saved.ok).toBe(true);
+        const read = await reader.findById(created.id);
+        expect(read?.reminders).toEqual([
+          reminder(),
+          reminder({
+            kind: '3h',
+            channel: 'email',
+            ok: false,
+            error: 'smtp down',
+            attempts: 2,
+          }),
+        ]);
+      });
+
+      it('replaces the log with the one it is given', async () => {
+        const created = await store();
+        await writer.saveReminders(created.id, [reminder()]);
+
+        await writer.saveReminders(created.id, [
+          reminder({ ok: false, error: 'whatsapp down', attempts: 2 }),
+        ]);
+
+        const read = await reader.findById(created.id);
+        expect(read?.reminders).toEqual([
+          reminder({ ok: false, error: 'whatsapp down', attempts: 2 }),
+        ]);
+      });
+
+      it('answers ok(null) for a booking that does not exist', async () => {
+        await expect(
+          writer.saveReminders(ABSENT_ID, [reminder()]),
+        ).resolves.toEqual({ ok: true, value: null });
+      });
+
+      it('finds the booking by the digest of the secret of its reminder', async () => {
+        const created = await store({}, 'the-hash');
+
+        await writer.saveReminders(created.id, [reminder()], 'reminder-hash');
+
+        await expect(
+          reader.findByCancelTokenHash('reminder-hash'),
+        ).resolves.toEqual(await reader.findById(created.id));
+        await expect(reader.findByCancelTokenHash('the-hash')).resolves.toEqual(
+          await reader.findById(created.id),
+        );
+        await expect(reader.findByCancelTokenHash('other')).resolves.toBeNull();
+      });
+    });
+
+    describe('findByDateRange', () => {
+      it('answers the bookings of the days of the range, both included', async () => {
+        await store({ date: '2030-06-17' });
+        await store({ date: '2030-06-18' });
+        await store({ date: '2030-06-19' });
+
+        const found = await reader.findByDateRange('2030-06-17', '2030-06-18');
+
+        expect(found.map((booking) => booking.date)).toEqual([
+          '2030-06-17',
+          '2030-06-18',
+        ]);
+      });
+
+      it('answers an empty list when no booking is in the range', async () => {
+        await store({ date: '2030-06-17' });
+
+        await expect(
+          reader.findByDateRange('2030-07-01', '2030-07-31'),
+        ).resolves.toEqual([]);
       });
     });
   });

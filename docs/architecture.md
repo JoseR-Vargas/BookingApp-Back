@@ -130,7 +130,18 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
 
 - `billing` (spec 23: plans, subscription state machine, plan limits, payment gateway port with a fake adapter, signed idempotent webhook): see [billing.md](./billing.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
 
-Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth', 'signup', 'tenancy', 'billing']`.
+- `reminders` (spec 24: the reminder of a booking before its appointment): domain rules (which
+  bookings are due, which window, whether it was already sent, which channels apply and the
+  markers of the template), ports `MessageSender` (the WhatsApp client of `whatsapp` and the
+  mailer of `email` behind it), `BusinessTime` (the clock of the business, `BUSINESS_TIMEZONE`)
+  and `ReminderPlan` (the limits of the plan of spec 23), the use cases `SendDueReminders` and
+  `SendReminder` (the log of what was sent lives in the booking, so the idempotency does not
+  depend on another service) and the scheduler that runs every X minutes
+  (`REMINDERS_INTERVAL_MINUTES`), one business at a time inside its own scope. The settings of
+  the business live in the `tenants` collection and its ports are in `tenancy`. See
+  [reminders.md](./reminders.md). Listed in `MIGRATED_MODULES` and `RESULT_MODULES`.
+
+Modules that return `Result`: `RESULT_MODULES = ['branding', 'catalog', 'availability', 'auth', 'signup', 'tenancy', 'billing', 'reminders']`.
 
 Temporary ports (they read data owned by a module that has not migrated yet):
 

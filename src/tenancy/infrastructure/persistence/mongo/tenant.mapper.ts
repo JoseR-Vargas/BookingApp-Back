@@ -1,5 +1,29 @@
 import { NewTenant, Tenant } from '../../../domain/tenant';
+import {
+  DEFAULT_REMINDER_HOURS_BEFORE,
+  DEFAULT_REMINDER_TEMPLATE,
+  ReminderSettings,
+} from '../../../../shared/domain/reminders';
 import { TenantRecord } from './tenant.entity';
+
+/** The reminder settings of a stored business, or the defaults when it has none. */
+export function toReminderSettings(record: TenantRecord): ReminderSettings {
+  const reminders = record.reminders;
+  if (!reminders) {
+    return {
+      enabled: true,
+      channels: ['whatsapp', 'email'],
+      hoursBefore: [...DEFAULT_REMINDER_HOURS_BEFORE],
+      template: DEFAULT_REMINDER_TEMPLATE,
+    };
+  }
+  return {
+    enabled: reminders.enabled ?? true,
+    channels: reminders.channels ?? ['whatsapp', 'email'],
+    hoursBefore: reminders.hoursBefore ?? [...DEFAULT_REMINDER_HOURS_BEFORE],
+    template: reminders.template ?? DEFAULT_REMINDER_TEMPLATE,
+  };
+}
 
 /** The document of the `tenants` collection as the domain knows it. */
 export function toTenant(record: TenantRecord): Tenant {
@@ -15,6 +39,7 @@ export function toTenant(record: TenantRecord): Tenant {
     storageQuotaBytes: record.storageQuotaBytes ?? null,
     storageUsedBytes: record.storageUsedBytes ?? 0,
     storageMeasuredAt: record.storageMeasuredAt ?? null,
+    reminders: toReminderSettings(record),
   };
 }
 

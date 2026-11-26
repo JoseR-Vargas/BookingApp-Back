@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { OccupiedBooking } from '../../../../availability/domain/availability';
 import { DomainError } from '../../../../shared/domain/domain-error';
 import { Result, err, ok } from '../../../../shared/domain/result';
+import { ReminderRecord } from '../../../../shared/domain/reminders';
 import { BookingActivityReader } from '../../../application/ports/booking-activity.reader';
 import { BookingReader } from '../../../application/ports/booking.reader';
 import { BookingWriter } from '../../../application/ports/booking.writer';
@@ -55,8 +56,21 @@ export class MongoBookingRepository
   }
 
   async findByCancelTokenHash(hash: string): Promise<Booking | null> {
-    const record = await this.model.findOne({ cancelTokenHash: hash }).exec();
+    // The digest of the cancel link of the booking and the one of the
+    // reminder it carries both find the booking they belong to (spec 24).
+    const record = await this.model
+      .findOne({
+        $or: [{ cancelTokenHash: hash }, { reminderCancelTokenHash: hash }],
+      })
+      .exec();
     return record ? toDomain(record) : null;
+  }
+
+  findByDateRange(fromDate: string, toDate: string): Promise<Booking[]> {
+    return this.model
+      .find({ date: { $gte: fromDate, $lte: toDate } })
+      .exec()
+      .then((records) => records.map(toDomain));
   }
 
   findOccupiedSlots(
@@ -123,6 +137,21 @@ export class MongoBookingRepository
       )
       .exec();
     return cancelled ? toDomain(cancelled) : null;
+  }
+
+  async saveReminders(
+    id: string,
+    reminders: ReminderRecord[],
+    reminderCancelTokenHash?: string,
+  ): Promise<Result<Booking | null>> {
+    const update: Record<string, unknown> = { reminders };
+    if (reminderCancelTokenHash) {
+      update.reminderCancelTokenHash = reminderCancelTokenHash;
+    }
+    const updated = await this.model
+      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .exec();
+    return ok(updated ? toDomain(updated) : null);
   }
 
   async findOccupied(

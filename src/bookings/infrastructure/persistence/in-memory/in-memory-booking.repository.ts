@@ -1,5 +1,6 @@
 import { DomainError } from '../../../../shared/domain/domain-error';
 import { Result, err, ok } from '../../../../shared/domain/result';
+import { ReminderRecord } from '../../../../shared/domain/reminders';
 import { OccupiedBooking } from '../../../../availability/domain/availability';
 import { BookingActivityReader } from '../../../application/ports/booking-activity.reader';
 import { BookingReader } from '../../../application/ports/booking.reader';
@@ -30,6 +31,8 @@ const STORED_FIELDS = [
 interface Stored {
   booking: Booking;
   cancelTokenHash?: string;
+  /** The digest of the secret the reminder of the booking carries (spec 24). */
+  reminderCancelTokenHash?: string;
 }
 
 /**
@@ -79,8 +82,23 @@ export class InMemoryBookingRepository
   }
 
   findByCancelTokenHash(hash: string): Promise<Booking | null> {
-    const found = this.stored.find((entry) => entry.cancelTokenHash === hash);
+    // The digest of the cancel link of the booking and the one of the
+    // reminder it carries both find the booking they belong to (spec 24).
+    const found = this.stored.find(
+      (entry) =>
+        entry.cancelTokenHash === hash ||
+        entry.reminderCancelTokenHash === hash,
+    );
     return Promise.resolve(found ? copy(found.booking) : null);
+  }
+
+  findByDateRange(fromDate: string, toDate: string): Promise<Booking[]> {
+    return Promise.resolve(
+      this.stored
+        .map(({ booking }) => booking)
+        .filter((booking) => booking.date >= fromDate && booking.date <= toDate)
+        .map((booking) => copy(booking)),
+    );
   }
 
   findOccupiedSlots(
@@ -175,6 +193,22 @@ export class InMemoryBookingRepository
     }
     entry.booking = { ...entry.booking, status: 'cancelled' };
     return Promise.resolve(copy(entry.booking));
+  }
+
+  saveReminders(
+    id: string,
+    reminders: ReminderRecord[],
+    reminderCancelTokenHash?: string,
+  ): Promise<Result<Booking | null>> {
+    const entry = this.stored.find(({ booking }) => booking.id === id);
+    if (!entry) {
+      return Promise.resolve(ok(null));
+    }
+    entry.booking = { ...entry.booking, reminders: copy(reminders) };
+    if (reminderCancelTokenHash) {
+      entry.reminderCancelTokenHash = reminderCancelTokenHash;
+    }
+    return Promise.resolve(ok(copy(entry.booking)));
   }
 
   findOccupied(
