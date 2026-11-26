@@ -234,6 +234,49 @@ describe('BookingsGateway', () => {
       expect(join).toHaveBeenCalledWith(tenantRoom('tenant-sur'));
     });
 
+    it('accepts the cookie session of an account of that business', async () => {
+      process.env.ADMIN_API_KEY = 'secret';
+      const sessions = { execute: jest.fn().mockResolvedValue({ ok: true }) };
+      const scope = { run: jest.fn((_t: unknown, fn: () => unknown) => fn()) };
+      const g = new BookingsGateway(
+        tenants as any,
+        undefined,
+        scope as any,
+        sessions as any,
+      );
+      let middleware!: (s: any, n: (e?: Error) => void) => void;
+      g.afterInit({ use: (fn: any) => (middleware = fn) } as any);
+      const { socket, join } = socketWith({ tenant: 'sur' });
+      socket.handshake.headers = { cookie: 'admin_session=tok123' };
+      const error = await new Promise<Error | undefined>((resolve) =>
+        middleware(socket, resolve),
+      );
+      expect(error).toBeUndefined();
+      expect(sessions.execute).toHaveBeenCalledWith('tok123');
+      expect(join).toHaveBeenCalledWith(tenantRoom('tenant-sur'));
+    });
+
+    it('refuses a cookie session that is not valid', async () => {
+      process.env.ADMIN_API_KEY = 'secret';
+      const sessions = { execute: jest.fn().mockResolvedValue({ ok: false }) };
+      const scope = { run: jest.fn((_t: unknown, fn: () => unknown) => fn()) };
+      const g = new BookingsGateway(
+        tenants as any,
+        undefined,
+        scope as any,
+        sessions as any,
+      );
+      let middleware!: (s: any, n: (e?: Error) => void) => void;
+      g.afterInit({ use: (fn: any) => (middleware = fn) } as any);
+      const { socket, join } = socketWith({ tenant: 'sur' });
+      socket.handshake.headers = { cookie: 'admin_session=bad' };
+      const error = await new Promise<Error | undefined>((resolve) =>
+        middleware(socket, resolve),
+      );
+      expect(error?.message).toBe('Unauthorized');
+      expect(join).not.toHaveBeenCalled();
+    });
+
     it('refuses an unknown business', async () => {
       const { error } = await run({ key: 'secret', tenant: 'nope' });
       expect(error?.message).toBe('Unauthorized');

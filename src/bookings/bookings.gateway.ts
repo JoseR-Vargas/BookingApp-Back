@@ -7,10 +7,14 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { AuthenticateAdminSessionUseCase } from '../auth/application/use-cases/authenticate-admin-session.use-case';
 import { EnvAdminCredentials } from '../auth/infrastructure/env-admin-credentials';
+import { readSessionToken } from '../auth/infrastructure/http/session-cookie';
 import {
   TENANT_CONTEXT,
+  TENANT_SCOPE,
   TenantContext,
+  TenantScope,
 } from '../shared/application/tenant-context.port';
 import { TenantService } from '../tenancy/application/tenant.service';
 
@@ -39,6 +43,8 @@ export class BookingsGateway
     @Optional()
     @Inject(TENANT_CONTEXT)
     private readonly context?: TenantContext,
+    @Optional() @Inject(TENANT_SCOPE) private readonly scope?: TenantScope,
+    @Optional() private readonly sessions?: AuthenticateAdminSessionUseCase,
   ) {}
 
   /**
@@ -59,16 +65,30 @@ export class BookingsGateway
     const auth = (socket.handshake?.auth ?? {}) as Record<string, unknown>;
     const text = (value: unknown) =>
       typeof value === 'string' && value !== '' ? value : undefined;
-    if (!this.credentials.isValid(text(auth.key), text(auth.username))) {
-      throw new Error('Unauthorized');
-    }
     if (!this.tenants) throw new Error('Unauthorized');
     const slug = text(auth.tenant);
     const resolved = slug
       ? await this.tenants.resolve(slug)
       : await this.tenants.resolveDefault();
     if (!resolved.ok) throw new Error('Unauthorized');
-    await socket.join(tenantRoom(resolved.value.id));
+    const tenant = resolved.value;
+
+    // The shared key, or the cookie session of an account of that business.
+    if (!this.credentials.isValid(text(auth.key), text(auth.username))) {
+      const token = readSessionToken(socket.handshake?.headers?.cookie);
+      const valid =
+        token !== undefined &&
+        this.sessions !== undefined &&
+        this.scope !== undefined &&
+        (
+          await this.scope.run(
+            { id: tenant.id, slug: tenant.slug, isDefault: tenant.isDefault },
+            () => this.sessions!.execute(token),
+          )
+        ).ok;
+      if (!valid) throw new Error('Unauthorized');
+    }
+    await socket.join(tenantRoom(tenant.id));
   }
 
   /** The room of the business in force, or undefined outside a business. */
