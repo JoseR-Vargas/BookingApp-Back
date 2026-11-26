@@ -12,6 +12,9 @@ export function toTenant(record: TenantRecord): Tenant {
     createdAt: record.createdAt,
     trialEndsAt: record.trialEndsAt ?? null,
     bookingQuota: record.bookingQuota ?? null,
+    storageQuotaBytes: record.storageQuotaBytes ?? null,
+    storageUsedBytes: record.storageUsedBytes ?? 0,
+    storageMeasuredAt: record.storageMeasuredAt ?? null,
   };
 }
 
@@ -27,5 +30,8 @@ export function toNewTenantRecord(
     createdAt: tenant.createdAt,
     trialEndsAt: tenant.trialEndsAt,
     bookingQuota: tenant.bookingQuota,
+    storageQuotaBytes: tenant.storageQuotaBytes,
+    storageUsedBytes: tenant.storageUsedBytes,
+    storageMeasuredAt: tenant.storageMeasuredAt,
   };
 }

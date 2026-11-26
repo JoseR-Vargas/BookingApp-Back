@@ -62,6 +62,8 @@ export class TenantService {
     slug: string;
     name: string;
     trial?: Trial;
+    /** The cap of data in bytes (spec 22); without it the business has no cap. */
+    storageQuotaBytes?: number;
   }): Promise<Result<Tenant>> {
     const slug = normalizeSlug(input.slug);
     if (!isValidSlug(slug)) {
@@ -93,6 +95,9 @@ export class TenantService {
       createdAt: this.clock.now(),
       trialEndsAt: input.trial?.trialEndsAt ?? null,
       bookingQuota: input.trial?.bookingQuota ?? null,
+      storageQuotaBytes: input.storageQuotaBytes ?? null,
+      storageUsedBytes: 0,
+      storageMeasuredAt: null,
     });
     return ok(saved);
   }

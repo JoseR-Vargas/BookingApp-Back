@@ -66,9 +66,16 @@ first `owner` and the session. A business whose trial is over (time or quota) an
 (`null`/`null`). The failure of a signup deletes the business and its scoped data
 (`TenantEraser`). Details in [signup.md](./signup.md).
 
+## Storage quota and limits (spec 22)
+
+`tenants` also keeps `storageQuotaBytes` (50 MB for businesses made by the signup, `null` = no cap),
+`storageUsedBytes` and `storageMeasuredAt`. The availability cache is partitioned by the business in
+force. Details in [atlas-limits.md](./atlas-limits.md).
+
 ## Backup and restore (Atlas free)
 
-Atlas free has no automatic backups. Before any migration on real data:
+Atlas free has no automatic backups. Prefer `npm run db:backup` / `npm run db:restore` (see
+[atlas-limits.md](./atlas-limits.md)). Before any migration on real data:
 
 ```bash
 mongodump --uri "$MONGO_URI" --out ~/Backups/booking-$(date +%F)

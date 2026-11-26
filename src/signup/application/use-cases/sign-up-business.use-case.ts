@@ -17,6 +17,7 @@ import {
   TenantEraser,
 } from '../../../tenancy/application/ports/tenant-eraser.port';
 import { TenantService } from '../../../tenancy/application/tenant.service';
+import { DEFAULT_STORAGE_QUOTA_BYTES } from '../../../tenancy/domain/storage.rules';
 import { newTrial } from '../../../tenancy/domain/trial.rules';
 import { SignupDraft, validateSignup } from '../../domain/signup.rules';
 import { withCompensation } from '../with-compensation';
@@ -53,6 +54,7 @@ export class SignUpBusinessUseCase {
       slug: signup.slug,
       name: signup.businessName,
       trial: newTrial(this.clock.now()),
+      storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
     });
     if (!created.ok) return created;
     const tenant = created.value;

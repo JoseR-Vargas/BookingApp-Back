@@ -25,6 +25,7 @@ import { AdminKeyGuard } from '../../../auth/admin-key.guard';
 import { Roles } from '../../../auth/infrastructure/http/roles.decorator';
 import { DomainError } from '../../../shared/domain/domain-error';
 import { Result } from '../../../shared/domain/result';
+import { PublicRateLimitGuard } from '../../../shared/infrastructure/http/public-rate-limit.guard';
 import { CancelBookingByTokenUseCase } from '../../application/use-cases/cancel-booking-by-token.use-case';
 import { CheckSlotUseCase } from '../../application/use-cases/check-slot.use-case';
 import { CreateBookingUseCase } from '../../application/use-cases/create-booking.use-case';
@@ -91,6 +92,7 @@ export class BookingsController {
   ) {}
 
   @Post()
+  @UseGuards(PublicRateLimitGuard)
   async create(@Body() body: unknown) {
     const created = await unwrap(() =>
       this.createBooking.execute(body as never),

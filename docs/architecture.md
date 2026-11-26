@@ -173,3 +173,12 @@ only adapters do.
   `tenant:<tenantId>`; notifications go to that room only.
 
 See `docs/tenancy.md` for the model, the commands and how to add a collection.
+
+## Atlas limits (spec 22)
+
+Cross-cutting pieces for the free Atlas tier, all behind ports: `RateLimiter`
+(`PUBLIC_RATE_LIMITER`, sliding window, `PublicRateLimitGuard` on the three public
+routes), `AvailabilityCache` (+ `AvailabilityInvalidator`, applied to the writer
+ports by `invalidatingWriter` in the module files), `TenantStorageMeter` /
+`TenantStorageStore` / `StorageGate` (storage quota). `src/scripts/db-backup.ts`
+wraps `mongodump` / `mongorestore`. See `docs/atlas-limits.md`.

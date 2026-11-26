@@ -31,6 +31,9 @@ const tenant = (over: Partial<Tenant>): Tenant => ({
   createdAt: NOW,
   trialEndsAt: null,
   bookingQuota: null,
+  storageQuotaBytes: null,
+  storageUsedBytes: 0,
+  storageMeasuredAt: null,
   ...over,
 });
 

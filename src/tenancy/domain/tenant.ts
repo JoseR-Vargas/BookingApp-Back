@@ -23,6 +23,12 @@ export interface Tenant {
   trialEndsAt: Date | null;
   /** How many bookings the trial allows; null means "no limit" (spec 21). */
   bookingQuota: number | null;
+  /** The cap of data in bytes; null means "no cap" (spec 22). */
+  storageQuotaBytes: number | null;
+  /** The size of its documents at the last measurement (0 when never measured). */
+  storageUsedBytes: number;
+  /** When the size was last measured; null when never. */
+  storageMeasuredAt: Date | null;
 }
 
 /** A business that does not exist yet. */
@@ -34,4 +40,7 @@ export interface NewTenant {
   createdAt: Date;
   trialEndsAt: Date | null;
   bookingQuota: number | null;
+  storageQuotaBytes: number | null;
+  storageUsedBytes: number;
+  storageMeasuredAt: Date | null;
 }

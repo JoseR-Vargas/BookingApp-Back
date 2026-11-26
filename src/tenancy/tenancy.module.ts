@@ -25,6 +25,12 @@ import {
 } from './application/ports/tenant.repository';
 import { TENANT_BOOKING_COUNTER } from './application/ports/tenant-booking-counter.port';
 import { TENANT_ERASER } from './application/ports/tenant-eraser.port';
+import { TENANT_STORAGE_METER } from './application/ports/tenant-storage-meter.port';
+import { TENANT_STORAGE_STORE } from './application/ports/tenant-storage-store.port';
+import { GetStorageStatusUseCase } from './application/use-cases/get-storage-status.use-case';
+import { STORAGE_GATE } from '../shared/application/storage-gate.port';
+import { TenancyStorageGate } from './infrastructure/tenancy-storage-gate';
+import { MongoTenantStorageMeter } from './infrastructure/persistence/mongo/mongo-tenant-storage-meter';
 import { GetTrialStatusUseCase } from './application/use-cases/get-trial-status.use-case';
 import { TenantService } from './application/tenant.service';
 import { DefaultTenantScope } from './infrastructure/default-tenant.scope';
@@ -62,12 +68,16 @@ class TenantBootstrap implements OnModuleInit {
     { provide: TENANT_READER, useClass: MongoTenantRepository },
     { provide: TENANT_WRITER, useClass: MongoTenantRepository },
     { provide: TENANT_ERASER, useClass: MongoTenantEraser },
+    { provide: TENANT_STORAGE_STORE, useClass: MongoTenantRepository },
+    { provide: TENANT_STORAGE_METER, useClass: MongoTenantStorageMeter },
+    { provide: STORAGE_GATE, useClass: TenancyStorageGate },
     { provide: TENANT_BOOKING_COUNTER, useClass: MongoTenantBookingCounter },
     { provide: TENANT_SCOPE, useClass: AsyncLocalStorageTenantContext },
     { provide: TENANT_CONTEXT, useExisting: TENANT_SCOPE },
     { provide: CLOCK, useClass: SystemClock },
     TenantService,
     GetTrialStatusUseCase,
+    GetStorageStatusUseCase,
     TenantMiddleware,
     DefaultTenantScope,
     TenantMigration,
@@ -81,6 +91,8 @@ class TenantBootstrap implements OnModuleInit {
     TENANT_ERASER,
     TenantService,
     GetTrialStatusUseCase,
+    GetStorageStatusUseCase,
+    STORAGE_GATE,
     TenantMiddleware,
     DefaultTenantScope,
     TenantMigration,

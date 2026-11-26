@@ -33,6 +33,18 @@ export class TenantRecord {
   /** Bookings the trial allows; null (or absent) means "no limit" (spec 21). */
   @Prop({ type: Number, default: null })
   bookingQuota: number | null;
+
+  /** The cap of data in bytes; null (or absent) means "no cap" (spec 22). */
+  @Prop({ type: Number, default: null })
+  storageQuotaBytes: number | null;
+
+  /** The size of its documents at the last measurement. */
+  @Prop({ type: Number, default: 0 })
+  storageUsedBytes: number;
+
+  /** When the size was last measured; null (or absent) means never. */
+  @Prop({ type: Date, default: null })
+  storageMeasuredAt: Date | null;
 }
 
 export const TenantSchema = SchemaFactory.createForClass(TenantRecord);

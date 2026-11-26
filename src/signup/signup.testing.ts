@@ -40,6 +40,9 @@ export class Tenants implements TenantReader, TenantWriter {
       createdAt: NOW,
       trialEndsAt: null,
       bookingQuota: null,
+      storageQuotaBytes: null,
+      storageUsedBytes: 0,
+      storageMeasuredAt: null,
     },
   ];
   findBySlug(slug: string) {

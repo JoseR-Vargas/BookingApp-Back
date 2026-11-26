@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { unscoped } from '../../../../shared/infrastructure/tenancy/unscoped';
 import { NewTenant, Tenant } from '../../../domain/tenant';
 import {
   TenantReader,
   TenantWriter,
 } from '../../../application/ports/tenant.repository';
+import { TenantStorageStore } from '../../../application/ports/tenant-storage-store.port';
 import { TenantRecord } from './tenant.entity';
 import { toNewTenantRecord, toTenant } from './tenant.mapper';
 
@@ -18,7 +19,9 @@ import { toNewTenantRecord, toTenant } from './tenant.mapper';
  * of the three uses the spec 18 allows.
  */
 @Injectable()
-export class MongoTenantRepository implements TenantReader, TenantWriter {
+export class MongoTenantRepository
+  implements TenantReader, TenantWriter, TenantStorageStore
+{
   constructor(
     @InjectModel(TenantRecord.name)
     private readonly model: Model<TenantRecord>,
@@ -46,5 +49,25 @@ export class MongoTenantRepository implements TenantReader, TenantWriter {
       this.model.create(toNewTenantRecord(tenant)),
     );
     return toTenant(saved.toObject() as TenantRecord);
+  }
+
+  async saveMeasurement(
+    tenantId: string,
+    usedBytes: number,
+    measuredAt: Date,
+  ): Promise<void> {
+    await unscoped('the storage measurement of a business', () =>
+      this.model
+        .updateOne(
+          { _id: new Types.ObjectId(tenantId) },
+          {
+            $set: {
+              storageUsedBytes: usedBytes,
+              storageMeasuredAt: measuredAt,
+            },
+          },
+        )
+        .exec(),
+    );
   }
 }

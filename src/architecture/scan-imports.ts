@@ -35,7 +35,8 @@ const APPLICATION_FORBIDDEN_PACKAGES = [
   'nodemailer',
 ];
 const APPLICATION_NEST_PACKAGE = '@nestjs/common';
-const APPLICATION_NEST_NAMES = ['Injectable', 'Inject'];
+// `Optional` marks a collaborator a use case works without (the cache, the storage gate: spec 22).
+const APPLICATION_NEST_NAMES = ['Injectable', 'Inject', 'Optional'];
 
 /** Layers that a layer may never import, by path segment. */
 const FORBIDDEN_SEGMENTS: Record<Layer, string[]> = {

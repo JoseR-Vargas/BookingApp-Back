@@ -87,6 +87,12 @@ is over. `blocked` = time over OR `bookingsMade >= bookingQuota`. `bookingsMade`
 booking of the business (cancelled ones too; a deleted booking no longer counts).
 The business record is cached for a minute by `TenantService`, the count is live.
 
+## Storage quota (spec 22)
+
+A business made by the signup also gets `storageQuotaBytes` = 50 MB; `GET /api/admin/session` adds
+`storage: null | { usedBytes, quotaBytes, percent, level }` and at 100 % new bookings answer
+`403 Este negocio alcanzó el límite de almacenamiento de su plan.` See [atlas-limits.md](./atlas-limits.md).
+
 ## Blocked business
 
 `POST /api/bookings` (the website and the WhatsApp bot use the same `CreateBookingUseCase`)

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Result, ok } from '../../../shared/domain/result';
 import { LocatedAvailability } from '../../domain/availability';
 import {
@@ -6,6 +6,10 @@ import {
   dayAvailability,
   isClosedDay,
 } from '../../domain/day-availability.rules';
+import {
+  AVAILABILITY_CACHE,
+  AvailabilityCache,
+} from '../ports/availability-cache.port';
 import { CATALOG_LOOKUP, CatalogLookup } from '../ports/catalog-lookup.port';
 import {
   OCCUPIED_SLOTS_READER,
@@ -26,6 +30,10 @@ export interface GetAvailabilityCommand {
  * Err(InvalidDate), Err(LocationNotFound) for an unknown or inactive location,
  * Err(ServiceSelectionFailed) for an empty, repeated or unknown service id. A
  * closed day never asks for bookings.
+ *
+ * A good answer is kept for a short time per business, date, services and
+ * location (spec 22); whatever changes the answer invalidates the cache. Errors
+ * are never cached. The cache is optional so the use case works without one.
  */
 @Injectable()
 export class GetAvailabilityUseCase {
@@ -33,9 +41,24 @@ export class GetAvailabilityUseCase {
     @Inject(CATALOG_LOOKUP) private readonly catalog: CatalogLookup,
     @Inject(OCCUPIED_SLOTS_READER)
     private readonly occupiedSlots: OccupiedSlotsReader,
+    @Optional()
+    @Inject(AVAILABILITY_CACHE)
+    private readonly cache?: AvailabilityCache,
   ) {}
 
   async execute(
+    command: GetAvailabilityCommand,
+  ): Promise<Result<LocatedAvailability>> {
+    if (!this.cache) return this.compute(command);
+    const hit = this.cache.get(command);
+    if (hit) return ok(hit);
+    const stamp = this.cache.stamp();
+    const computed = await this.compute(command);
+    if (computed.ok) this.cache.set(command, computed.value, stamp);
+    return computed;
+  }
+
+  private async compute(
     command: GetAvailabilityCommand,
   ): Promise<Result<LocatedAvailability>> {
     const day = checkDate(command.date);

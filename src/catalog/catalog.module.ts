@@ -5,6 +5,11 @@ import { UPCOMING_BOOKINGS_READER } from '../admin/application/ports/upcoming-bo
 import { CountAffectedBookingsUseCase } from '../admin/application/use-cases/count-affected-bookings.use-case';
 import { MongoUpcomingBookingsReader } from '../admin/infrastructure/mongo-upcoming-bookings.reader';
 import { CLOCK } from '../shared/application/clock.port';
+import {
+  AVAILABILITY_INVALIDATOR,
+  AvailabilityInvalidator,
+} from '../shared/application/availability-invalidator.port';
+import { invalidatingWriter } from '../shared/infrastructure/cache/invalidating-writer';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BOOKING_ACTIVITY } from './application/ports/booking-activity.port';
 import { Booking, BookingSchema } from '../bookings/schemas/booking.schema';
@@ -82,6 +87,9 @@ import {
   ServiceSchema,
 } from './infrastructure/persistence/mongo/service.entity';
 
+/** The invalidator is optional: a module tested alone has no cache (spec 22). */
+const optionalInvalidator = { token: AVAILABILITY_INVALIDATOR, optional: true };
+
 /**
  * Composition root of the catalog: the only place where ports are bound to
  * adapters. Swapping the database means new adapters and changing these lines.
@@ -117,15 +125,54 @@ import {
     MongoLocationRepository,
     MongoBusinessSettingsRepository,
     { provide: PROFESSIONAL_READER, useExisting: MongoProfessionalRepository },
-    { provide: PROFESSIONAL_WRITER, useExisting: MongoProfessionalRepository },
+    // Writes that change the availability make its cache forget (spec 22).
+    {
+      provide: PROFESSIONAL_WRITER,
+      useFactory: (
+        repository: MongoProfessionalRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'insert',
+          'update',
+          'delete',
+        ]),
+      inject: [MongoProfessionalRepository, optionalInvalidator],
+    },
     {
       provide: PROFESSIONAL_PHOTO_STORE,
       useExisting: MongoProfessionalRepository,
     },
     { provide: SERVICE_READER, useExisting: MongoServiceRepository },
-    { provide: SERVICE_WRITER, useExisting: MongoServiceRepository },
+    {
+      provide: SERVICE_WRITER,
+      useFactory: (
+        repository: MongoServiceRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'insert',
+          'update',
+          'delete',
+          'removeProfessional',
+        ]),
+      inject: [MongoServiceRepository, optionalInvalidator],
+    },
     { provide: LOCATION_READER, useExisting: MongoLocationRepository },
-    { provide: LOCATION_WRITER, useExisting: MongoLocationRepository },
+    {
+      provide: LOCATION_WRITER,
+      useFactory: (
+        repository: MongoLocationRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'insert',
+          'insertIfAbsent',
+          'update',
+          'saveSchedule',
+        ]),
+      inject: [MongoLocationRepository, optionalInvalidator],
+    },
     {
       provide: LEGACY_SCHEDULE_READER,
       useExisting: MongoBusinessSettingsRepository,

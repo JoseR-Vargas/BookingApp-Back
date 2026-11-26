@@ -45,6 +45,11 @@ import { MongoBookingStatistics } from './infrastructure/persistence/mongo/mongo
 import { MongoBookingRepository } from './infrastructure/persistence/mongo/mongo-booking.repository';
 import { CatalogBookingAdapter } from './infrastructure/catalog/catalog-booking.adapter';
 import { CLOCK } from '../shared/application/clock.port';
+import {
+  AVAILABILITY_INVALIDATOR,
+  AvailabilityInvalidator,
+} from '../shared/application/availability-invalidator.port';
+import { invalidatingWriter } from '../shared/infrastructure/cache/invalidating-writer';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { BUSINESS_CLOCK } from '../availability/application/ports/business-clock.port';
 import { SystemBusinessClock } from '../availability/infrastructure/system-business-clock';
@@ -76,8 +81,26 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     CheckSlotUseCase,
     GetStatisticsUseCase,
     // Ports -> adapters.
-    { provide: BOOKING_READER, useClass: MongoBookingRepository },
-    { provide: BOOKING_WRITER, useClass: MongoBookingRepository },
+    MongoBookingRepository,
+    { provide: BOOKING_READER, useExisting: MongoBookingRepository },
+    // Every write tells the availability cache of the business to forget (spec 22).
+    {
+      provide: BOOKING_WRITER,
+      useFactory: (
+        repository: MongoBookingRepository,
+        invalidator?: AvailabilityInvalidator,
+      ) =>
+        invalidatingWriter(repository, invalidator, [
+          'create',
+          'update',
+          'delete',
+          'cancelIfConfirmed',
+        ]),
+      inject: [
+        MongoBookingRepository,
+        { token: AVAILABILITY_INVALIDATOR, optional: true },
+      ],
+    },
     { provide: BOOKING_STATISTICS_READER, useClass: MongoBookingStatistics },
     { provide: BOOKING_ACTIVITY_READER, useClass: MongoBookingActivityReader },
     { provide: BOOKING_CATALOG, useClass: CatalogBookingAdapter },

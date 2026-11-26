@@ -22,7 +22,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "tenant:create": "ts-node --project tsconfig.json src/scripts/tenant-cli.ts create",
     "tenant:migrate": "ts-node --project tsconfig.json src/scripts/tenant-cli.ts migrate",
-    "admin:create": "ts-node --project tsconfig.json src/scripts/admin-cli.ts create"
+    "admin:create": "ts-node --project tsconfig.json src/scripts/admin-cli.ts create",
+    "db:backup": "ts-node --project tsconfig.json src/scripts/db-backup.ts backup",
+    "db:restore": "ts-node --project tsconfig.json src/scripts/db-backup.ts restore"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.0.2",
