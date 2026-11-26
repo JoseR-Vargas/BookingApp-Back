@@ -7,7 +7,7 @@ import {
   dayOfWeekFromIsoDate,
   toMinutes,
 } from '../../shared/domain/schedule/schedule.rules';
-import { getBusinessNow } from '../../whatsapp/bot/business-time';
+import { getBusinessNow } from '../../shared/domain/business-time';
 
 /** The part of a booking needed to tell whether a schedule still fits it. */
 export interface ScheduledBooking {

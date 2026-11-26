@@ -12,14 +12,14 @@ export function toReminderSettings(record: TenantRecord): ReminderSettings {
   if (!reminders) {
     return {
       enabled: true,
-      channels: ['whatsapp', 'email'],
+      channels: ['email'],
       hoursBefore: [...DEFAULT_REMINDER_HOURS_BEFORE],
       template: DEFAULT_REMINDER_TEMPLATE,
     };
   }
   return {
     enabled: reminders.enabled ?? true,
-    channels: reminders.channels ?? ['whatsapp', 'email'],
+    channels: reminders.channels ?? ['email'],
     hoursBefore: reminders.hoursBefore ?? [...DEFAULT_REMINDER_HOURS_BEFORE],
     template: reminders.template ?? DEFAULT_REMINDER_TEMPLATE,
   };

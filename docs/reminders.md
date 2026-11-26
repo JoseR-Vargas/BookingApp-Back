@@ -11,7 +11,7 @@ La configuración vive en el documento del negocio (`tenants.reminders`):
 ```ts
 reminders: {
   enabled: boolean;              // por defecto true
-  channels: ('whatsapp' | 'email')[];  // por defecto ['whatsapp', 'email']
+  channels: ('email')[];  // por defecto ['email']
   hoursBefore: number[];         // por defecto [24, 3]
   template: string;               // con los marcadores del mensaje
 }
@@ -46,10 +46,10 @@ de esa reserva y de ese negocio: nunca los de otro cliente.
 - **Una vez por ventana y canal:** la reserva guarda lo que se le mandó
   (`bookings.reminders`), así que una vuelta repetida no duplica el mensaje.
 - **Se manda una vez por ventana:** la misma ventana con otro canal son dos
-  recordatorios distintos (el de WhatsApp y el de email).
+  recordatorios distintos (uno por ventana).
 - **Cancelada o en el pasado: no se recuerda.** Una reserva cancelada antes
   de la ventana no recibe nada.
-- **Canales:** WhatsApp si el cliente dejó teléfono, email si dejó correo,
+- **Canales:** email si el cliente dejó correo,
   los dos si dejó los dos, ninguno si no dejó ninguno (y solo si el
   negocio los tiene activados).
 - **Fallo de mejor esfuerzo:** si el proveedor falla, se anota como fallido
@@ -67,7 +67,7 @@ puede mandarlos.
 ```ts
 reminders?: {
   kind: string;              // la ventana: '24h', '3h'
-  channel: 'whatsapp' | 'email';
+  channel: 'email';
   sentAt: Date;
   ok: boolean;
   error?: string;            // por qué falló, cuando falló
@@ -95,7 +95,7 @@ Nunca se guarda un secreto en claro.
   {
     "config": {
       "enabled": true,
-      "channels": ["whatsapp", "email"],
+      "channels": ["email"],
       "hoursBefore": [24, 3],
       "template": "Hola {cliente}, te recordamos tu cita en {negocio}: {fecha} a las {hora} con {profesional}. Si necesitas cancelar, entra aquí: {cancelar}"
     },
@@ -105,7 +105,7 @@ Nunca se guarda un secreto en claro.
       {
         "bookingId": "67f0c1a2b3c4d5e6f7a8b9c0",
         "kind": "24h",
-        "channel": "whatsapp",
+        "channel": "email",
         "sentAt": "2026-03-24T14:00:00.000Z",
         "ok": true,
         "error": null,
@@ -122,7 +122,7 @@ Nunca se guarda un secreto en claro.
 - `PUT /api/admin/reminders` -> `200` con el mismo cuerpo.
 
   ```json
-  { "enabled": true, "channels": ["whatsapp"], "hoursBefore": [12], "template": "Hola {cliente}" }
+  { "enabled": true, "channels": ["email"], "hoursBefore": [12], "template": "Hola {cliente}" }
   ```
 
   Los campos que no van se quedan como estaban. `400` con un mensaje en
@@ -138,7 +138,7 @@ Un servicio dentro del backend revisa las reservas cada **5 minutos**
   su propio alcance (`TenantScope.run`): un negocio nunca ve los datos de
   otro;
 - las vueltas no se solapan: si una está corriendo, la siguiente espera;
-- si WhatsApp o el correo no están configurados, ese canal se salta (se
+- si el correo no está configurado, ese canal se salta (se
   avisa por log) y el resto sigue;
 - una reserva que falló se reintenta en la vuelta siguiente, hasta 3 veces.
 
@@ -148,7 +148,7 @@ El planificador no manda nada de las reservas de un negocio suspendido.
 
 | Puerto (`src/reminders/application/ports`) | Adaptadores                                                        |
 | ----------------------------------------- | ------------------------------------------------------------------ |
-| `MessageSender`                           | `WhatsappMessageSender` (el cliente de `src/whatsapp`), `EmailMessageSender` (el mailer de `src/email`), `InMemoryMessageSender` (pruebas) |
+| `MessageSender`                           | `EmailMessageSender` (el mailer de `src/email`), `FakeMessageSender` (el simulador del desarrollo y el e2e), `InMemoryMessageSender` (pruebas) |
 | `BusinessTime`                            | `SystemBusinessTime` (el reloj del negocio, `BUSINESS_TIMEZONE`)     |
 | `ReminderPlan`                            | `BillingReminderPlan` (los límites del plan de spec 23)              |
 
@@ -162,7 +162,7 @@ reserva: mensaje, envío y anotación), `GetReminderSettings` y
 
 ## Límites conocidos
 
-- El WhatsApp de texto libre solo se acepta dentro de las 24 horas de una
+- El el correo de texto libre solo se acepta dentro de las 24 horas de una
   conversación con la pasarela; fuera de ese plazo el proveedor lo rechaza
   (queda registrado como fallo y se reintenta). Las plantillas aprobadas por
   la pasarela quedan fuera de esta spec.

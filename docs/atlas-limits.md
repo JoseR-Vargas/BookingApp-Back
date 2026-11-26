@@ -39,7 +39,7 @@ checked against the database, which stays the authority.
 `GET /api/availability`, `GET /api/public-availability` and `POST /api/bookings`
 share one sliding window per IP (`request.ip`), 120 per minute. Over the limit:
 `429 { "statusCode": 429, "message": "Demasiadas peticiones. Intenta más tarde." }`.
-Admin routes, the WhatsApp webhook and the rest are not limited (signup has its own
+Admin routes and the rest are not limited (signup has its own
 limit). Old keys are swept, so memory does not grow. It is per process; behind a
 proxy set Express `trust proxy` or everybody shares one IP.
 

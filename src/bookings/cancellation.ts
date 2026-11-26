@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { getBusinessNow } from '../whatsapp/bot/business-time';
+import { getBusinessNow } from '../shared/domain/business-time';
 
 /** A cancel token is 32 random bytes in base64url: 43 characters. */
 export const CANCEL_TOKEN_LENGTH = 43;

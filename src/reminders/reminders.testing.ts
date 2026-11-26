@@ -131,9 +131,8 @@ export function buildReminders(
   options: { now?: Date; settings?: Partial<ReminderSettings> } = {},
 ) {
   const bookings = new InMemoryBookingRepository();
-  const whatsapp = new InMemoryMessageSender('whatsapp');
   const email = new InMemoryMessageSender('email');
-  const senders: MessageSenders = { whatsapp, email };
+  const senders: MessageSenders = { email };
   const tenant = new FakeTenantReminders();
   tenant.settings = { ...tenant.settings, ...(options.settings ?? {}) };
   const plan = new FakePlan();
@@ -171,7 +170,6 @@ export function buildReminders(
 
   return {
     bookings,
-    whatsapp,
     email,
     tenant,
     plan,

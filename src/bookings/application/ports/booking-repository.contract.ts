@@ -48,7 +48,7 @@ const nextHash = () => `hash-${Date.now()}-${++hashCounter}`;
 /** One entry of the log of reminders of a booking (spec 24). */
 const reminder = (over: Partial<ReminderRecord> = {}): ReminderRecord => ({
   kind: '24h',
-  channel: 'whatsapp',
+  channel: 'email',
   sentAt: new Date('2026-03-24T10:00:00Z'),
   ok: true,
   attempts: 1,
@@ -401,12 +401,12 @@ export function describeBookingRepositoryContract(
         await writer.saveReminders(created.id, [reminder()]);
 
         await writer.saveReminders(created.id, [
-          reminder({ ok: false, error: 'whatsapp down', attempts: 2 }),
+          reminder({ ok: false, error: 'smtp down', attempts: 2 }),
         ]);
 
         const read = await reader.findById(created.id);
         expect(read?.reminders).toEqual([
-          reminder({ ok: false, error: 'whatsapp down', attempts: 2 }),
+          reminder({ ok: false, error: 'smtp down', attempts: 2 }),
         ]);
       });
 

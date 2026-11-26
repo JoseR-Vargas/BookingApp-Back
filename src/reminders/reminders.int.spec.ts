@@ -39,7 +39,6 @@ const TOMORROW_TIME = '10:00';
 describe('the reminders against MongoDB', () => {
   let connection: Connection;
   let bookings: MongoBookingRepository;
-  let whatsapp: InMemoryMessageSender;
   let email: InMemoryMessageSender;
   let sendDue: SendDueRemindersUseCase;
   const originalZone = process.env.BUSINESS_TIMEZONE;
@@ -82,9 +81,8 @@ describe('the reminders against MongoDB', () => {
     });
 
     bookings = new MongoBookingRepository(bookingModel);
-    whatsapp = new InMemoryMessageSender('whatsapp');
     email = new InMemoryMessageSender('email');
-    const senders: MessageSenders = { whatsapp, email };
+    const senders: MessageSenders = { email };
     const clock: Clock = { now: () => NOW };
     const time = new SystemBusinessTime(clock);
     const context = new AsyncLocalStorageTenantContext();
@@ -110,7 +108,7 @@ describe('the reminders against MongoDB', () => {
   const store = async (over: Record<string, unknown> = {}) => {
     const created = await bookings.create(
       {
-        client: { name: 'Ana', phone: '099123456' },
+        client: { name: 'Ana', phone: '099123456', email: 'ana@example.com' },
         services: [{ id: 'corte', name: 'Corte', price: 1200, duration: 60 }],
         totalPrice: 1200,
         totalDuration: 60,
@@ -138,22 +136,20 @@ describe('the reminders against MongoDB', () => {
       expect(first.value.sent).toBe(1);
       expect(first.value.failed).toBe(0);
     }
-    expect(whatsapp.sent).toHaveLength(1);
-    expect(whatsapp.sent[0].body).toContain('Barbería Sur');
-    expect(whatsapp.sent[0].body).toContain(
-      'https://app.example.com/cancelar/',
-    );
+    expect(email.sent).toHaveLength(1);
+    expect(email.sent[0].body).toContain('Barbería Sur');
+    expect(email.sent[0].body).toContain('https://app.example.com/cancelar/');
 
     const second = await sendDue.execute();
     expect(second.ok).toBe(true);
     if (second.ok) expect(second.value.sent).toBe(0);
-    expect(whatsapp.sent).toHaveLength(1);
+    expect(email.sent).toHaveLength(1);
 
     const read = await bookings.findById(booking.id);
     expect(read?.reminders).toEqual([
       expect.objectContaining({
         kind: '24h',
-        channel: 'whatsapp',
+        channel: 'email',
         ok: true,
         attempts: 1,
       }),
@@ -167,7 +163,7 @@ describe('the reminders against MongoDB', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.sent).toBe(0);
-    expect(whatsapp.sent).toHaveLength(0);
+    expect(email.sent).toHaveLength(0);
   });
 
   it('does not remind a booking in the past', async () => {
@@ -177,12 +173,12 @@ describe('the reminders against MongoDB', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.sent).toBe(0);
-    expect(whatsapp.sent).toHaveLength(0);
+    expect(email.sent).toHaveLength(0);
   });
 
   it('records a failed send and retries it up to three times', async () => {
     const booking = await store();
-    whatsapp.failWith = 'whatsapp down';
+    email.failWith = 'smtp down';
 
     const first = await sendDue.execute();
     expect(first.ok).toBe(true);
@@ -197,9 +193,9 @@ describe('the reminders against MongoDB', () => {
     expect(read?.reminders).toEqual([
       expect.objectContaining({
         kind: '24h',
-        channel: 'whatsapp',
+        channel: 'email',
         ok: false,
-        error: 'whatsapp down',
+        error: 'smtp down',
         attempts: 3,
       }),
     ]);
@@ -214,14 +210,15 @@ describe('the reminders against MongoDB', () => {
     expect(after?.reminders?.[0].attempts).toBe(3);
   });
 
-  it('reminds a client who left no email only through WhatsApp', async () => {
-    await store({ client: { name: 'Ana', phone: '099123456' } });
+  it('does not remind a client who left no email', async () => {
+    await store({
+      client: { name: 'Ana', phone: '099123456', email: '' },
+    });
 
     const result = await sendDue.execute();
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.sent).toBe(1);
-    expect(whatsapp.sent).toHaveLength(1);
+    if (result.ok) expect(result.value.sent).toBe(0);
     expect(email.sent).toHaveLength(0);
   });
 
@@ -231,7 +228,7 @@ describe('the reminders against MongoDB', () => {
     await sendDue.execute();
 
     const token = /cancelar\/([A-Za-z0-9_-]+)/.exec(
-      whatsapp.sent[0].body,
+      email.sent[0].body,
     )?.[1] as string;
     const tokens = new NodeCancelTokens();
     const found = await bookings.findByCancelTokenHash(tokens.hash(token));
@@ -251,7 +248,7 @@ describe('the reminders against MongoDB', () => {
         $set: {
           reminders: {
             enabled: false,
-            channels: ['whatsapp', 'email'],
+            channels: ['email'],
             hoursBefore: [24, 3],
             template: 'Hola {cliente}',
           },
@@ -265,6 +262,6 @@ describe('the reminders against MongoDB', () => {
     if (result.ok) {
       expect(result.value).toEqual({ skipped: 'disabled', sent: 0, failed: 0 });
     }
-    expect(whatsapp.sent).toHaveLength(0);
+    expect(email.sent).toHaveLength(0);
   });
 });

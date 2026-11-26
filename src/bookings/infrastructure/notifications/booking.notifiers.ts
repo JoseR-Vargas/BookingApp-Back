@@ -1,5 +1,5 @@
 // ===== AVISOS DE RESERVA =====
-// The three notifications a booking triggers (live panel, confirmation email, admin WhatsApp),
+// The two notifications a booking triggers (live panel and confirmation email),
 // behind one port. Every one of them is best effort: a failure is logged and never fails the
 // booking, exactly as before the hexagonal migration.
 
@@ -49,42 +49,6 @@ export class EmailBookingNotifier implements BookingNotifier {
   async cancelled(booking: Booking): Promise<void> {
     if (!booking.client?.email) return;
     await this.email.sendCancellationConfirmation(booking);
-  }
-}
-
-/**
- * WhatsApp message to the administrator. It is awaited with a bound (not fired and forgotten)
- * because serverless platforms freeze un-awaited work once the response is sent.
- */
-@Injectable()
-export class AdminWhatsappBookingNotifier implements BookingNotifier {
-  private static readonly TIMEOUT_MS = 5000;
-
-  constructor(
-    private readonly notifier: {
-      notifyNewBooking(booking: unknown): Promise<void>;
-      notifyCancelledBooking(booking: unknown): Promise<void>;
-    },
-  ) {}
-
-  async created(booking: Booking): Promise<void> {
-    await this.notify(() => this.notifier.notifyNewBooking(booking));
-  }
-
-  async cancelled(booking: Booking): Promise<void> {
-    await this.notify(() => this.notifier.notifyCancelledBooking(booking));
-  }
-
-  private async notify(send: () => Promise<void>): Promise<void> {
-    let timer: NodeJS.Timeout | undefined;
-    try {
-      const timeout = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, AdminWhatsappBookingNotifier.TIMEOUT_MS);
-      });
-      await Promise.race([send(), timeout]);
-    } finally {
-      clearTimeout(timer);
-    }
   }
 }
 

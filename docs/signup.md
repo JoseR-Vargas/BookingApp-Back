@@ -95,7 +95,7 @@ A business made by the signup also gets `storageQuotaBytes` = 50 MB; `GET /api/a
 
 ## Blocked business
 
-`POST /api/bookings` (the website and the WhatsApp bot use the same `CreateBookingUseCase`)
+`POST /api/bookings` (the website uses the same `CreateBookingUseCase`)
 answers `403 Este negocio alcanzó el límite de su prueba.` through the `TrialGate` port
 (`TenancyTrialGate` asks `GetTrialStatusUseCase`). The check is the first thing the use case does.
 Admin routes, catalog, availability reads, accounts and cancellation keep working.

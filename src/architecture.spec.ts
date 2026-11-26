@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATED_MODULES } from './architecture/migrated-modules';
 import { RESULT_MODULES } from './architecture/result-modules';
@@ -67,18 +67,10 @@ describe('architecture: shared schedule core', () => {
 });
 
 /**
- * `availability` asks for "the business's now" through the `BusinessClock`
- * port instead of importing the WhatsApp bot (spec 13): nothing of the
- * module that stays (layers, composition root, temporary facade and
- * re-exports) may import from `src/whatsapp`.
+ * The WhatsApp bot is gone (the owner decided): no module may import from
+ * `src/whatsapp`, because that directory no longer exists.
  */
-describe('architecture: availability does not depend on whatsapp', () => {
-  const AVAILABILITY = join(SRC, 'availability');
-  const ROOT_FILES = [
-    'availability.module.ts',
-    'availability.service.ts',
-    'availability.calculator.ts',
-  ];
+describe('architecture: whatsapp is gone', () => {
   const IMPORTS_WHATSAPP = /from\s+['"][^'"]*\/whatsapp(\/|['"])/;
 
   const filesIn = (dir: string): string[] =>
@@ -90,17 +82,17 @@ describe('architecture: availability does not depend on whatsapp', () => {
           : [],
     );
 
-  it('imports nothing from src/whatsapp', () => {
-    const files = [
-      ...['domain', 'application', 'infrastructure'].flatMap((layer) =>
-        filesIn(join(AVAILABILITY, layer)),
-      ),
-      ...ROOT_FILES.map((file) => join(AVAILABILITY, file)),
-    ];
+  it('has no module of whatsapp left', () => {
+    expect(existsSync(join(SRC, 'whatsapp'))).toBe(false);
+  });
+
+  it('imports nothing from a whatsapp module', () => {
+    const files = ['admin', 'availability', 'billing', 'bookings', 'branding', 'catalog', 'email', 'platform', 'reminders', 'shared', 'tenancy']
+      .flatMap((module) => filesIn(join(SRC, module)));
     const offenders = files.filter((file) =>
       IMPORTS_WHATSAPP.test(readFileSync(file, 'utf8')),
     );
-    expect(files.length).toBeGreaterThan(10);
+    expect(files.length).toBeGreaterThan(50);
     expect(offenders).toEqual([]);
   });
 });

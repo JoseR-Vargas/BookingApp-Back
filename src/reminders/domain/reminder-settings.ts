@@ -88,7 +88,7 @@ function readChannels(
     if (!isChannel(entry)) {
       return err(
         new InvalidReminderSettings(
-          `El canal "${String(entry)}" no existe. Usa "whatsapp" o "email".`,
+          `El canal "${String(entry)}" no existe. Usa "email".`,
         ),
       );
     }

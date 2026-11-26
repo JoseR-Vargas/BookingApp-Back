@@ -29,7 +29,6 @@ import { BookingsGateway } from './bookings.gateway';
 import { NodeCancelTokens } from './infrastructure/crypto/node-cancel-tokens';
 import { BookingsController } from './infrastructure/http/bookings.controller';
 import {
-  AdminWhatsappBookingNotifier,
   CompositeBookingNotifier,
   EmailBookingNotifier,
   SocketBookingNotifier,
@@ -57,8 +56,6 @@ import { SystemBusinessClock } from '../availability/infrastructure/system-busin
 import { EmailModule } from '../email/email.module';
 import { EmailService } from '../email/email.service';
 import { CatalogModule } from '../catalog/catalog.module';
-import { WhatsappApiModule } from '../whatsapp/whatsapp-api.module';
-import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
 
 @Module({
   imports: [
@@ -68,8 +65,6 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     TenancyModule,
     // The plan gate of new bookings (spec 23).
     BillingModule,
-    // Outbound only; WhatsappModule imports BookingsModule, never the reverse.
-    WhatsappApiModule,
   ],
   controllers: [BookingsController],
   providers: [
@@ -113,17 +108,12 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     { provide: CLOCK, useClass: SystemClock },
     {
       provide: BOOKING_NOTIFIER,
-      useFactory: (
-        gateway: BookingsGateway,
-        email: EmailService,
-        admin: AdminBookingNotifier,
-      ) => {
+      useFactory: (gateway: BookingsGateway, email: EmailService) => {
         const socket = new SocketBookingNotifier(gateway);
         const mail = new EmailBookingNotifier(email);
-        const whatsapp = new AdminWhatsappBookingNotifier(admin);
-        return new CompositeBookingNotifier([socket, mail, whatsapp]);
+        return new CompositeBookingNotifier([socket, mail]);
       },
-      inject: [BookingsGateway, EmailService, AdminBookingNotifier],
+      inject: [BookingsGateway, EmailService],
     },
     // Facade (temporary) and live panel.
     BookingsService,

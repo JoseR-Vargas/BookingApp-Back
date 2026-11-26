@@ -12,7 +12,7 @@ export interface BusinessNow {
  */
 export function getBusinessNow(
   timezone: string | undefined,
-  instant: Date = new Date(),
+  instant: Date,
 ): BusinessNow | null {
   const zone = timezone?.trim();
   if (!zone) {

@@ -1,7 +1,6 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { Booking } from '../../domain/booking';
 import {
-  AdminWhatsappBookingNotifier,
   CompositeBookingNotifier,
   EmailBookingNotifier,
   SocketBookingNotifier,
@@ -68,20 +67,6 @@ describe('the booking notifications', () => {
 
     expect(gateway.notifyNewBooking).toHaveBeenCalledWith(booking);
     expect(gateway.notifyBookingCancelled).toHaveBeenCalledWith(booking.id);
-  });
-
-  it('stops waiting for the admin message after five seconds', async () => {
-    jest.useFakeTimers();
-    const pending = new Promise<void>(() => undefined);
-    const notifier = new AdminWhatsappBookingNotifier({
-      notifyNewBooking: jest.fn(() => pending),
-      notifyCancelledBooking: jest.fn(() => pending),
-    });
-
-    const done = notifier.created(booking);
-    jest.advanceTimersByTime(5000);
-    await expect(done).resolves.toBeUndefined();
-    jest.useRealTimers();
   });
 
   it('runs every notification and keeps going when one fails', async () => {

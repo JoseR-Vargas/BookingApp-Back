@@ -1,6 +1,6 @@
 // ===== ELECCIÓN DEL REMITENTE =====
 // Which sender the reminders use. `REMINDERS_SENDER=fake` uses the simulator
-// (development and the e2e); anything else uses the real channels.
+// (development and the e2e); anything else uses the real mailer.
 
 import {
   MessageSender,
@@ -14,13 +14,10 @@ export const SUPPORTED_REMINDER_SENDERS = ['real', 'fake'] as const;
 export const isFakeSender = (env: NodeJS.ProcessEnv = process.env): boolean =>
   (env.REMINDERS_SENDER ?? '').trim() === 'fake';
 
-/** The senders of every channel, the real ones or the simulator. */
+/** The senders of every channel, the real one or the simulator. */
 export const selectMessageSenders = (
   env: NodeJS.ProcessEnv = process.env,
-  real: { whatsapp: MessageSender; email: MessageSender } = {
-    whatsapp: new FakeMessageSender('whatsapp'),
-    email: new FakeMessageSender('email'),
-  },
+  real: { email: MessageSender } = { email: new FakeMessageSender('email') },
 ): MessageSenders => {
   const chosen = (env.REMINDERS_SENDER ?? '').trim() || 'real';
   if (!SUPPORTED_REMINDER_SENDERS.includes(chosen as never)) {
@@ -29,10 +26,7 @@ export const selectMessageSenders = (
     );
   }
   if (chosen === 'fake') {
-    return {
-      whatsapp: new FakeMessageSender('whatsapp'),
-      email: new FakeMessageSender('email'),
-    };
+    return { email: new FakeMessageSender('email') };
   }
-  return { whatsapp: real.whatsapp, email: real.email };
+  return { email: real.email };
 };

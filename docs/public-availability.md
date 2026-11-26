@@ -28,7 +28,7 @@ professionals free at it. A service that is not published (or is inactive or unk
   selector) and `locationId` (the one the days were computed for). The settings above (`enabled`,
   `days`, `serviceIds`) stay global; the hours and professionals are those of the chosen location.
   When the page is disabled the answer is still just `{ "enabled": false }`.
-- The hours come from `GetAvailabilityUseCase` (the WhatsApp bot reaches it through the temporary
+- The hours come from `GetAvailabilityUseCase` (the legacy callers reach it through the temporary
   `AvailabilityService.getAvailability` facade), the same source as the booking modal, so start interval, per-day starts and existing bookings are respected.
 - "Today" is the business date (`BUSINESS_TIMEZONE`, UTC date when unset), read through the
   `BusinessClock` port (`SystemBusinessClock`); the use case never reads the environment. With

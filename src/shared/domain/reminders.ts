@@ -5,7 +5,7 @@
 // `reminders` owns the rules. Pure data: no framework, no clock, no I/O.
 
 /** The channels a reminder may leave through. */
-export const REMINDER_CHANNELS = ['whatsapp', 'email'] as const;
+export const REMINDER_CHANNELS = ['email'] as const;
 
 export type ReminderChannel = (typeof REMINDER_CHANNELS)[number];
 
@@ -34,7 +34,7 @@ export const DEFAULT_REMINDER_TEMPLATE =
 /** The settings of a business that never saved any. */
 export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
   enabled: true,
-  channels: ['whatsapp', 'email'],
+  channels: ['email'],
   hoursBefore: [...DEFAULT_REMINDER_HOURS_BEFORE],
   template: DEFAULT_REMINDER_TEMPLATE,
 };

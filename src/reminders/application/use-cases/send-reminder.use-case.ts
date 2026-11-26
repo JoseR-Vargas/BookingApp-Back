@@ -146,10 +146,7 @@ export class SendReminderUseCase {
       cancelar: this.cancelLink(token),
     });
     const subject = `Recordatorio de tu cita — ${businessName}`;
-    const to =
-      channel === 'whatsapp'
-        ? (booking.client.phone ?? '')
-        : (booking.client.email ?? '');
+    const to = booking.client.email ?? '';
 
     const result = await this.senders[channel].send({ to, subject, body });
     const sentAt = this.time.now();

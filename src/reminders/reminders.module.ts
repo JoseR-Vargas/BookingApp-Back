@@ -10,7 +10,6 @@ import { EmailModule } from '../email/email.module';
 import { CLOCK } from '../shared/application/clock.port';
 import { SystemClock } from '../shared/infrastructure/system.clock';
 import { TenancyModule } from '../tenancy/tenancy.module';
-import { WhatsappApiModule } from '../whatsapp/whatsapp-api.module';
 import { BUSINESS_TIME } from './application/ports/business-time.port';
 import {
   MESSAGE_SENDERS,
@@ -25,7 +24,6 @@ import { SendReminderUseCase } from './application/use-cases/send-reminder.use-c
 import { RemindersController } from './infrastructure/http/reminders.controller';
 import { EmailMessageSender } from './infrastructure/messaging/email-message-sender';
 import { selectMessageSenders } from './infrastructure/messaging/message-sender.factory';
-import { WhatsappMessageSender } from './infrastructure/messaging/whatsapp-message-sender';
 import { BillingReminderPlan } from './infrastructure/plan/billing-reminder-plan';
 import { RemindersScheduler } from './infrastructure/scheduler/reminders-scheduler';
 import { SystemBusinessTime } from './infrastructure/time/system-business-time';
@@ -38,8 +36,6 @@ import { SystemBusinessTime } from './infrastructure/time/system-business-time';
     TenancyModule,
     // The mailer and the public URL of the app.
     EmailModule,
-    // The client of WhatsApp.
-    WhatsappApiModule,
   ],
   controllers: [RemindersController],
   providers: [
@@ -48,15 +44,11 @@ import { SystemBusinessTime } from './infrastructure/time/system-business-time';
     // One sender per channel; the use case picks the one the client needs.
     {
       provide: MESSAGE_SENDERS,
-      inject: [WhatsappMessageSender, EmailMessageSender],
-      useFactory: (
-        whatsapp: MessageSender,
-        email: MessageSender,
-      ): MessageSenders =>
-        selectMessageSenders(process.env, { whatsapp, email }),
+      inject: [EmailMessageSender],
+      useFactory: (email: MessageSender): MessageSenders =>
+        selectMessageSenders(process.env, { email }),
     },
     { provide: REMINDER_PLAN, useClass: BillingReminderPlan },
-    WhatsappMessageSender,
     EmailMessageSender,
     BillingReminderPlan,
     GetReminderSettingsUseCase,

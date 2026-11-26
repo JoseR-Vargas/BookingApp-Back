@@ -111,17 +111,16 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
   `Result` rules. The schedule model and its pure rules live in `src/shared/domain/schedule/`, the
   shared core that `catalog` and `availability` both import (so neither depends on the other).
   `CatalogService` and `CatalogAdminService` are temporary facades (`@deprecated`) that wrap the
-  use cases for `bookings`, `availability`, `admin` and the WhatsApp bot, and are deleted as each
+  use cases for `bookings`, `availability` and `admin`, and are deleted as each
   consumer migrates. See [locations.md](./locations.md).
 
 - `availability` (spec 13: availability of a day and the public view): domain rules (`occupancy`,
   `day-availability`, `public-view`) and errors, ports `OccupiedSlotsReader`, `CatalogLookup` and
   `BusinessClock`, use cases `GetAvailability` and `GetPublicAvailability`, and controllers with the
   same routes and answers as before. `AvailabilityService` is a temporary facade (`@deprecated`)
-  that wraps `GetAvailability` for the WhatsApp bot, and `availability.calculator.ts` only
-  re-exports the rules for `bookings`, `admin` and the bot. The module imports nothing from
-  `whatsapp`: "today" and the current time come from `BusinessClock` (`SystemBusinessClock`, which
-  reads `BUSINESS_TIMEZONE`).
+  that wraps `GetAvailability` for the legacy callers, and `availability.calculator.ts` only
+  re-exports the rules for `bookings` and `admin`. "Today" and the current time come from
+  `BusinessClock` (`SystemBusinessClock`, which reads `BUSINESS_TIMEZONE`).
 
 - `auth` (spec 20: admin accounts, sessions and roles): domain rules and errors, ports for
   users, sessions, password hashing and session tokens, one use case per action, in-memory and
@@ -132,8 +131,8 @@ Migrated modules are listed in `src/architecture/migrated-modules.ts` (`MIGRATED
 
 - `reminders` (spec 24: the reminder of a booking before its appointment): domain rules (which
   bookings are due, which window, whether it was already sent, which channels apply and the
-  markers of the template), ports `MessageSender` (the WhatsApp client of `whatsapp` and the
-  mailer of `email` behind it), `BusinessTime` (the clock of the business, `BUSINESS_TIMEZONE`)
+  markers of the template), ports `MessageSender` (the mailer of `email`), `BusinessTime` (the
+  clock of the business, `BUSINESS_TIMEZONE`)
   and `ReminderPlan` (the limits of the plan of spec 23), the use cases `SendDueReminders` and
   `SendReminder` (the log of what was sent lives in the booking, so the idempotency does not
   depend on another service) and the scheduler that runs every X minutes
@@ -168,7 +167,7 @@ out of hours with `ScheduleImpactService` (`src/admin/schedule-impact.ts`), whic
 until spec 14; and `src/catalog/locations.ts` keeps `LocationNotFoundError` for `bookings` and the
 `AvailabilityService` facade until they migrate.
 
-Others (`bookings`, `admin`, `auth`, `email`, `whatsapp`) still use the
+Others (`bookings`, `admin`, `auth`, `email`) still use the
 previous style and are migrated one per spec. Do not extend the previous style in new code.
 
 ## Commands

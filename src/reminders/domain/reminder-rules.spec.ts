@@ -31,7 +31,7 @@ const settings = (over: Partial<ReminderSettings> = {}): ReminderSettings => ({
 
 const record = (over: Partial<ReminderRecord> = {}): ReminderRecord => ({
   kind: '24h',
-  channel: 'whatsapp',
+  channel: 'email',
   sentAt: new Date('2026-03-24T10:00:00Z'),
   ok: true,
   attempts: 1,
@@ -92,25 +92,25 @@ describe('isWindowDue', () => {
 
 describe('the log of the booking', () => {
   it('is pending when nothing was sent for the window and the channel', () => {
-    expect(reminderState([], '24h', 'whatsapp')).toBe('pending');
-    expect(reminderState(undefined, '24h', 'whatsapp')).toBe('pending');
+    expect(reminderState([], '24h', 'email')).toBe('pending');
+    expect(reminderState(undefined, '24h', 'email')).toBe('pending');
   });
 
   it('is sent once the reminder left', () => {
-    expect(reminderState([record()], '24h', 'whatsapp')).toBe('sent');
+    expect(reminderState([record()], '24h', 'email')).toBe('sent');
   });
 
   it('is pending again while the attempts are left', () => {
     const failed = [record({ ok: false, error: 'smtp down', attempts: 1 })];
 
-    expect(reminderState(failed, '24h', 'whatsapp')).toBe('pending');
-    expect(reminderAttempts(failed, '24h', 'whatsapp')).toBe(1);
+    expect(reminderState(failed, '24h', 'email')).toBe('pending');
+    expect(reminderAttempts(failed, '24h', 'email')).toBe(1);
   });
 
   it('is given up after three attempts', () => {
     const failed = [record({ ok: false, error: 'smtp down', attempts: 3 })];
 
-    expect(reminderState(failed, '24h', 'whatsapp')).toBe('exhausted');
+    expect(reminderState(failed, '24h', 'email')).toBe('exhausted');
   });
 
   it('keeps one entry per window and channel', () => {
@@ -135,32 +135,15 @@ describe('the log of the booking', () => {
 });
 
 describe('the channels of a booking', () => {
-  it('uses WhatsApp when the client left a phone', () => {
-    expect(channelsForBooking({ phone: '099123456' }, settings())).toEqual([
-      'whatsapp',
-    ]);
-  });
-
   it('uses email when the client left an email', () => {
     expect(
       channelsForBooking({ email: 'ana@example.com' }, settings()),
     ).toEqual(['email']);
   });
 
-  it('uses both when the client left both', () => {
-    expect(
-      channelsForBooking(
-        { phone: '099123456', email: 'ana@example.com' },
-        settings(),
-      ),
-    ).toEqual(['whatsapp', 'email']);
-  });
-
-  it('uses none when the client left neither', () => {
+  it('uses none when the client left no email', () => {
     expect(channelsForBooking({}, settings())).toEqual([]);
-    expect(channelsForBooking({ phone: '  ', email: '' }, settings())).toEqual(
-      [],
-    );
+    expect(channelsForBooking({ email: '  ' }, settings())).toEqual([]);
   });
 
   it('only uses the channels the business allows', () => {
@@ -222,11 +205,11 @@ describe('the text of the message', () => {
 });
 
 describe('the settings of the business', () => {
-  it('starts with both channels, 24 and 3 hours and a template that says everything', () => {
+  it('starts with the email channel, 24 and 3 hours and a template that says everything', () => {
     const defaults = defaultReminderSettings();
 
     expect(defaults.enabled).toBe(true);
-    expect(defaults.channels).toEqual(['whatsapp', 'email']);
+    expect(defaults.channels).toEqual(['email']);
     expect(defaults.hoursBefore).toEqual([24, 3]);
     expect(defaults.template).toContain('{cliente}');
     expect(defaults.template).toContain('{fecha}');
@@ -251,7 +234,7 @@ describe('the settings of the business', () => {
   it('accepts the whole configuration at once', () => {
     const merged = mergeReminderSettings(defaultReminderSettings(), {
       enabled: true,
-      channels: ['whatsapp'],
+      channels: ['email'],
       hoursBefore: [48, 6],
       template: 'Hola {cliente}',
     });
@@ -260,7 +243,7 @@ describe('the settings of the business', () => {
     if (merged.ok) {
       expect(merged.value).toEqual({
         enabled: true,
-        channels: ['whatsapp'],
+        channels: ['email'],
         hoursBefore: [48, 6],
         template: 'Hola {cliente}',
       });

@@ -60,7 +60,7 @@ describe('reminders HTTP (in-memory adapters)', () => {
         recent: unknown[];
       };
       expect(body.config.enabled).toBe(true);
-      expect(body.config.channels).toEqual(['whatsapp', 'email']);
+      expect(body.config.channels).toEqual(['email']);
       expect(body.config.hoursBefore).toEqual([24, 3]);
       expect(typeof body.config.template).toBe('string');
       expect(body.allowsReminders).toBe(true);
@@ -69,7 +69,9 @@ describe('reminders HTTP (in-memory adapters)', () => {
     });
 
     it('answers the reminders that were sent and the ones that failed', async () => {
-      await b.store({ client: { name: 'Ana', phone: '099123456' } });
+      await b.store({
+        client: { name: 'Ana', phone: '099123456', email: 'ana@example.com' },
+      });
       await b.sendDue.execute();
 
       const res = await http().get('/api/admin/reminders');
@@ -85,7 +87,7 @@ describe('reminders HTTP (in-memory adapters)', () => {
         (res.body as { recent: { kind: string }[] }).recent[0],
       ).toMatchObject({
         kind: '24h',
-        channel: 'whatsapp',
+        channel: 'email',
         ok: true,
         error: null,
         attempts: 1,
@@ -99,7 +101,7 @@ describe('reminders HTTP (in-memory adapters)', () => {
         .put('/api/admin/reminders')
         .send({
           enabled: true,
-          channels: ['whatsapp'],
+          channels: ['email'],
           hoursBefore: [12],
           template: 'Hola {cliente}, tu cita es el {fecha} a las {hora}.',
         });
@@ -107,11 +109,11 @@ describe('reminders HTTP (in-memory adapters)', () => {
       expect(res.status).toBe(200);
       expect((res.body as { config: unknown }).config).toEqual({
         enabled: true,
-        channels: ['whatsapp'],
+        channels: ['email'],
         hoursBefore: [12],
         template: 'Hola {cliente}, tu cita es el {fecha} a las {hora}.',
       });
-      expect(b.tenant.settings.channels).toEqual(['whatsapp']);
+      expect(b.tenant.settings.channels).toEqual(['email']);
     });
 
     it('answers 400 when the configuration is not valid', async () => {

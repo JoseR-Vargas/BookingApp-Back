@@ -122,17 +122,14 @@ const hasText = (value: string | undefined): boolean =>
 
 /**
  * The channels a booking may be reminded through: the ones the business
- * allows and the client left a contact for. A client without phone nor email
- * is reminded through no channel at all.
+ * allows and the client left a contact for. A client without email is
+ * reminded through no channel at all.
  */
 export function channelsForBooking(
   contact: ReminderContact,
   settings: ReminderSettings,
 ): ReminderChannel[] {
   const channels: ReminderChannel[] = [];
-  if (settings.channels.includes('whatsapp') && hasText(contact.phone)) {
-    channels.push('whatsapp');
-  }
   if (settings.channels.includes('email') && hasText(contact.email)) {
     channels.push('email');
   }

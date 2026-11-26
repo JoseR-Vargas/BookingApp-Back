@@ -24,8 +24,8 @@ each repository, so a forgotten filter cannot leak data.
 - The shared admin key can be turned off per business with
   `ADMIN_KEY_DISABLED_TENANTS` (slugs, comma separated) once it has an owner
   (`npm run admin:create`).
-- The WhatsApp collections (`conversation_states`, `processed_messages`) are
-  not scoped: the bot answers in the default business.
+- The collections of the bot of WhatsApp were removed with the bot (the owner
+  decided): nothing outside the six collections above is scoped.
 
 ## Request flow
 

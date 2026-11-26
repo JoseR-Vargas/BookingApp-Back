@@ -17,7 +17,7 @@ export class TenantReminderSettings {
   @Prop({
     type: [String],
     enum: REMINDER_CHANNELS,
-    default: ['whatsapp', 'email'],
+    default: ['email'],
   })
   channels: ReminderChannel[];
 
