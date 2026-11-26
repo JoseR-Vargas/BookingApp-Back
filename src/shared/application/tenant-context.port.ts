@@ -11,6 +11,8 @@ export interface Tenant {
   id: string;
   /** The slug the request named (`X-Tenant`), or the default one. */
   slug: string;
+  /** Whether it is the default business (the one served at the root). Optional: unknown means "treat as default". */
+  isDefault?: boolean;
 }
 
 /**

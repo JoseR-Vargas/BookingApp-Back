@@ -6,11 +6,13 @@ import { EMAIL_SENDER } from './application/ports/email-sender.port';
 import { PUBLIC_APP_URL } from './application/ports/public-app-url.port';
 import { SendBookingConfirmationUseCase } from './application/use-cases/send-booking-confirmation.use-case';
 import { SendCancellationConfirmationUseCase } from './application/use-cases/send-cancellation-confirmation.use-case';
-import { EnvPublicAppUrl } from './infrastructure/env-public-app-url';
+import { TenancyModule } from '../tenancy/tenancy.module';
+import { TenantPublicAppUrl } from './infrastructure/tenant-public-app-url';
 import { MailerEmailSender } from './infrastructure/mailer-email-sender';
 
 @Module({
   imports: [
+    TenancyModule,
     MailerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -31,7 +33,7 @@ import { MailerEmailSender } from './infrastructure/mailer-email-sender';
   ],
   providers: [
     { provide: EMAIL_SENDER, useClass: MailerEmailSender },
-    { provide: PUBLIC_APP_URL, useClass: EnvPublicAppUrl },
+    { provide: PUBLIC_APP_URL, useClass: TenantPublicAppUrl },
     SendBookingConfirmationUseCase,
     SendCancellationConfirmationUseCase,
     EmailService,

@@ -11,6 +11,8 @@ export interface TenantScopeState {
   tenantId?: string;
   /** The slug the request named. */
   slug?: string;
+  /** Whether the business is the default one. */
+  isDefault?: boolean;
   /**
    * The reason of the `unscoped` escape in force, if any. While it is set
    * the queries are NOT filtered by business.

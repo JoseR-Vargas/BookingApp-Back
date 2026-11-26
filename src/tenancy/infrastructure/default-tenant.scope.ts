@@ -24,6 +24,9 @@ export class DefaultTenantScope {
       throw resolved.error;
     }
     const tenant = resolved.value;
-    return this.scope.run({ id: tenant.id, slug: tenant.slug }, fn);
+    return this.scope.run(
+      { id: tenant.id, slug: tenant.slug, isDefault: true },
+      fn,
+    );
   }
 }

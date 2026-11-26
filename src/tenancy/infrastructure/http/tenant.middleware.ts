@@ -41,6 +41,9 @@ export class TenantMiddleware implements NestMiddleware {
       throw resolved.error;
     }
     const tenant = resolved.value;
-    this.scope.run({ id: tenant.id, slug: tenant.slug }, next);
+    this.scope.run(
+      { id: tenant.id, slug: tenant.slug, isDefault: tenant.isDefault },
+      next,
+    );
   }
 }

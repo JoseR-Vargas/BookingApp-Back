@@ -23,7 +23,11 @@ export class AsyncLocalStorageTenantContext
         'There is no business in the context: the query would read the data of every business.',
       );
     }
-    return { id: scope.tenantId, slug: scope.slug ?? '' };
+    return {
+      id: scope.tenantId,
+      slug: scope.slug ?? '',
+      isDefault: scope.isDefault,
+    };
   }
 
   /**
@@ -32,7 +36,7 @@ export class AsyncLocalStorageTenantContext
    */
   run<T>(tenant: Tenant, fn: () => T): T {
     return tenantScopeStorage.run(
-      { tenantId: tenant.id, slug: tenant.slug },
+      { tenantId: tenant.id, slug: tenant.slug, isDefault: tenant.isDefault },
       fn,
     );
   }
