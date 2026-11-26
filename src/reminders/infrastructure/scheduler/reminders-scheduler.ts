@@ -28,7 +28,8 @@ export const remindersIntervalMinutes = (
   env: NodeJS.ProcessEnv = process.env,
 ): number => {
   const raw = Number(env.REMINDERS_INTERVAL_MINUTES);
-  return Number.isInteger(raw) && raw > 0
+  // A fraction is allowed (0.05 = three seconds): the e2e waits for a round.
+  return Number.isFinite(raw) && raw > 0
     ? raw
     : DEFAULT_REMINDERS_INTERVAL_MINUTES;
 };

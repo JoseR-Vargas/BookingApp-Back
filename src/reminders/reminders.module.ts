@@ -24,6 +24,7 @@ import { SendDueRemindersUseCase } from './application/use-cases/send-due-remind
 import { SendReminderUseCase } from './application/use-cases/send-reminder.use-case';
 import { RemindersController } from './infrastructure/http/reminders.controller';
 import { EmailMessageSender } from './infrastructure/messaging/email-message-sender';
+import { selectMessageSenders } from './infrastructure/messaging/message-sender.factory';
 import { WhatsappMessageSender } from './infrastructure/messaging/whatsapp-message-sender';
 import { BillingReminderPlan } from './infrastructure/plan/billing-reminder-plan';
 import { RemindersScheduler } from './infrastructure/scheduler/reminders-scheduler';
@@ -51,7 +52,8 @@ import { SystemBusinessTime } from './infrastructure/time/system-business-time';
       useFactory: (
         whatsapp: MessageSender,
         email: MessageSender,
-      ): MessageSenders => ({ whatsapp, email }),
+      ): MessageSenders =>
+        selectMessageSenders(process.env, { whatsapp, email }),
     },
     { provide: REMINDER_PLAN, useClass: BillingReminderPlan },
     WhatsappMessageSender,
