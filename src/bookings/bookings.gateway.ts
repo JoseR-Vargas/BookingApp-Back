@@ -80,11 +80,11 @@ export class BookingsGateway
     }
   }
 
-  handleConnection(client: any) {
+  handleConnection(client: { id: string }) {
     console.log(`Cliente conectado: ${client.id}`);
   }
 
-  handleDisconnect(client: any) {
+  handleDisconnect(client: { id: string }) {
     console.log(`Cliente desconectado: ${client.id}`);
   }
 
