@@ -137,14 +137,18 @@ export class TenancyModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(TenantMiddleware)
+      // The exclusions are compared with the URL of the request, so every path
+      // carries the global prefix (`/api`); the second form covers an
+      // application without it.
+      //
       // The signup creates its business: it has none until then (spec 21).
       .exclude(
+        { path: 'api/signup', method: RequestMethod.POST },
         { path: 'signup', method: RequestMethod.POST },
         // The gateway's webhook has no business header: the event names it (spec 23).
+        { path: 'api/webhooks/payments', method: RequestMethod.POST },
         { path: 'webhooks/payments', method: RequestMethod.POST },
-        // The panel of the owner of the system (spec 25). The exclusion is
-        // compared with the URL of the request, so the path carries the global
-        // prefix (`/api`); the second form covers an application without it.
+        // The panel of the owner of the system (spec 25).
         { path: 'api/platform/(.*)', method: RequestMethod.ALL },
         { path: 'api/platform', method: RequestMethod.ALL },
         { path: 'platform/(.*)', method: RequestMethod.ALL },
