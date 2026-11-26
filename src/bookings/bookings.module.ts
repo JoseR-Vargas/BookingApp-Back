@@ -11,6 +11,8 @@ import { BOOKING_READER } from './application/ports/booking.reader';
 import { BOOKING_STATISTICS_READER } from './application/ports/booking-statistics.reader';
 import { BOOKING_WRITER } from './application/ports/booking.writer';
 import { CANCEL_TOKENS } from './application/ports/cancel-tokens.port';
+import { TRIAL_GATE } from './application/ports/trial-gate.port';
+import { TenancyTrialGate } from './infrastructure/trial/tenancy-trial-gate';
 import { CancelBookingByTokenUseCase } from './application/use-cases/cancel-booking-by-token.use-case';
 import { CheckSlotUseCase } from './application/use-cases/check-slot.use-case';
 import { CreateBookingUseCase } from './application/use-cases/create-booking.use-case';
@@ -80,6 +82,7 @@ import { AdminBookingNotifier } from '../whatsapp/admin-booking.notifier';
     { provide: BOOKING_ACTIVITY_READER, useClass: MongoBookingActivityReader },
     { provide: BOOKING_CATALOG, useClass: CatalogBookingAdapter },
     { provide: CANCEL_TOKENS, useClass: NodeCancelTokens },
+    { provide: TRIAL_GATE, useClass: TenancyTrialGate },
     { provide: BUSINESS_CLOCK, useClass: SystemBusinessClock },
     { provide: CLOCK, useClass: SystemClock },
     {

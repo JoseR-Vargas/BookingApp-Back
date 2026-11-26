@@ -8,4 +8,6 @@ export const MIGRATED_MODULES: readonly string[] = [
   'catalog',
   'availability',
   'auth',
+  'signup',
+  'tenancy',
 ];

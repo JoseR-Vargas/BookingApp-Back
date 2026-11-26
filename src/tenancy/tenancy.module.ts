@@ -9,6 +9,7 @@ import {
   Module,
   NestModule,
   OnModuleInit,
+  RequestMethod,
 } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import {
@@ -22,6 +23,9 @@ import {
   TENANT_READER,
   TENANT_WRITER,
 } from './application/ports/tenant.repository';
+import { TENANT_BOOKING_COUNTER } from './application/ports/tenant-booking-counter.port';
+import { TENANT_ERASER } from './application/ports/tenant-eraser.port';
+import { GetTrialStatusUseCase } from './application/use-cases/get-trial-status.use-case';
 import { TenantService } from './application/tenant.service';
 import { DefaultTenantScope } from './infrastructure/default-tenant.scope';
 import { TenantMiddleware } from './infrastructure/http/tenant.middleware';
@@ -30,6 +34,8 @@ import {
   TenantRecord,
   TenantSchema,
 } from './infrastructure/persistence/mongo/tenant.entity';
+import { MongoTenantBookingCounter } from './infrastructure/persistence/mongo/mongo-tenant-booking-counter';
+import { MongoTenantEraser } from './infrastructure/persistence/mongo/mongo-tenant-eraser';
 import { MongoTenantRepository } from './infrastructure/persistence/mongo/mongo-tenant.repository';
 
 /**
@@ -55,10 +61,13 @@ class TenantBootstrap implements OnModuleInit {
   providers: [
     { provide: TENANT_READER, useClass: MongoTenantRepository },
     { provide: TENANT_WRITER, useClass: MongoTenantRepository },
+    { provide: TENANT_ERASER, useClass: MongoTenantEraser },
+    { provide: TENANT_BOOKING_COUNTER, useClass: MongoTenantBookingCounter },
     { provide: TENANT_SCOPE, useClass: AsyncLocalStorageTenantContext },
     { provide: TENANT_CONTEXT, useExisting: TENANT_SCOPE },
     { provide: CLOCK, useClass: SystemClock },
     TenantService,
+    GetTrialStatusUseCase,
     TenantMiddleware,
     DefaultTenantScope,
     TenantMigration,
@@ -69,7 +78,9 @@ class TenantBootstrap implements OnModuleInit {
     TENANT_WRITER,
     TENANT_SCOPE,
     TENANT_CONTEXT,
+    TENANT_ERASER,
     TenantService,
+    GetTrialStatusUseCase,
     TenantMiddleware,
     DefaultTenantScope,
     TenantMigration,
@@ -78,9 +89,14 @@ class TenantBootstrap implements OnModuleInit {
 export class TenancyModule implements NestModule {
   /**
    * Every request belongs to a business (spec 18): the header names it and the
-   * rest of the request runs inside its scope.
+   * rest of the request runs inside its scope. Only `POST /api/signup` is
+   * exempt (spec 21): it creates the business and opens the scope itself.
    */
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(TenantMiddleware).forRoutes('*');
+    consumer
+      .apply(TenantMiddleware)
+      // The signup creates its business: it has none until then (spec 21).
+      .exclude({ path: 'signup', method: RequestMethod.POST })
+      .forRoutes('*');
   }
 }

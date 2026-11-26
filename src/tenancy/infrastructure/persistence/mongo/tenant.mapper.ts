@@ -10,6 +10,8 @@ export function toTenant(record: TenantRecord): Tenant {
     status: record.status,
     isDefault: record.isDefault,
     createdAt: record.createdAt,
+    trialEndsAt: record.trialEndsAt ?? null,
+    bookingQuota: record.bookingQuota ?? null,
   };
 }
 
@@ -23,5 +25,7 @@ export function toNewTenantRecord(
     status: tenant.status,
     isDefault: tenant.isDefault,
     createdAt: tenant.createdAt,
+    trialEndsAt: tenant.trialEndsAt,
+    bookingQuota: tenant.bookingQuota,
   };
 }

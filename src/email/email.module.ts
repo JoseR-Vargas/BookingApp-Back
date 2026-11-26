@@ -5,6 +5,7 @@ import { EmailService } from './email.service';
 import { EMAIL_SENDER } from './application/ports/email-sender.port';
 import { PUBLIC_APP_URL } from './application/ports/public-app-url.port';
 import { SendBookingConfirmationUseCase } from './application/use-cases/send-booking-confirmation.use-case';
+import { SendWelcomeEmailUseCase } from './application/use-cases/send-welcome-email.use-case';
 import { SendCancellationConfirmationUseCase } from './application/use-cases/send-cancellation-confirmation.use-case';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { TenantPublicAppUrl } from './infrastructure/tenant-public-app-url';
@@ -36,8 +37,9 @@ import { MailerEmailSender } from './infrastructure/mailer-email-sender';
     { provide: PUBLIC_APP_URL, useClass: TenantPublicAppUrl },
     SendBookingConfirmationUseCase,
     SendCancellationConfirmationUseCase,
+    SendWelcomeEmailUseCase,
     EmailService,
   ],
-  exports: [EmailService],
+  exports: [EmailService, SendWelcomeEmailUseCase],
 })
 export class EmailModule {}

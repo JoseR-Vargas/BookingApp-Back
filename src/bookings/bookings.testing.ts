@@ -14,6 +14,7 @@ import {
 } from './application/ports/booking-catalog.port';
 import { BookingNotifier } from './application/ports/booking-notifier.port';
 import { CancelTokens } from './application/ports/cancel-tokens.port';
+import { TrialGate } from './application/ports/trial-gate.port';
 import { Booking, BookingPlace } from './domain/booking';
 import { InvalidBooking } from './domain/booking.errors';
 import { SelectedService } from './domain/booking.rules';
@@ -188,6 +189,14 @@ export class SequentialTokens implements CancelTokens {
   }
 }
 
+/** A trial gate that answers what the test says; open by default. */
+export class FakeTrialGate implements TrialGate {
+  open = true;
+  allowsNewBookings(): Promise<boolean> {
+    return Promise.resolve(this.open);
+  }
+}
+
 export const fixedClock = (instant: string): Clock => ({
   now: () => new Date(instant),
 });
@@ -210,6 +219,7 @@ export function buildBookings(
   const catalog = new FakeBookingCatalog();
   const notifier = new RecordingNotifier();
   const tokens = new SequentialTokens();
+  const trial = new FakeTrialGate();
   const clock = options.clock ?? businessClock('2026-03-20', '09:00');
   const now = fixedClock(options.now ?? '2026-03-20T12:00:00Z');
   return {
@@ -217,12 +227,14 @@ export function buildBookings(
     catalog,
     notifier,
     tokens,
+    trial,
     create: new CreateBookingUseCase(
       catalog,
       repository,
       repository,
       tokens,
       notifier,
+      trial,
     ),
     update: new UpdateBookingUseCase(catalog, repository, repository),
     list: new ListBookingsUseCase(repository),

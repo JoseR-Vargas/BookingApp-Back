@@ -5,6 +5,8 @@ import {
   BusinessHoursUnverifiable,
   CancellationClosed,
   MissingBookingData,
+  TRIAL_LIMIT_MESSAGE,
+  TrialLimitReached,
 } from '../../domain/booking.errors';
 import {
   CENTRO,
@@ -40,6 +42,32 @@ const value = <T>(result: Result<T>) => {
 };
 
 describe('CreateBookingUseCase', () => {
+  it('refuses a new booking when the trial of the business is over, and stores nothing', async () => {
+    const app = buildBookings();
+    app.trial.open = false;
+
+    const error = failure(await app.create.execute(input()));
+
+    expect(error).toBeInstanceOf(TrialLimitReached);
+    expect(error.kind).toBe('forbidden');
+    expect(error.message).toBe('Este negocio alcanzó el límite de su prueba.');
+    expect(error.message).toBe(TRIAL_LIMIT_MESSAGE);
+    expect(await app.list.execute()).toEqual({ ok: true, value: [] });
+    expect(app.notifier.created_).toEqual([]);
+    expect(app.catalog.calls).toEqual({});
+  });
+
+  it('keeps cancelling and reading bookings in a blocked business', async () => {
+    const app = buildBookings();
+    const { booking, cancelToken } = value(await app.create.execute(input()));
+    app.trial.open = false;
+
+    expect(value(await app.get.execute(booking.id))).toMatchObject({
+      id: booking.id,
+    });
+    expect((await app.cancel.execute(cancelToken)).ok).toBe(true);
+  });
+
   it('creates a confirmed booking from the catalog and returns the token once', async () => {
     const app = buildBookings();
 

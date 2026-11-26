@@ -25,6 +25,14 @@ export class TenantRecord {
 
   @Prop({ type: Date, required: true })
   createdAt: Date;
+
+  /** End of the free trial; null (or absent) means "no trial" (spec 21). */
+  @Prop({ type: Date, default: null })
+  trialEndsAt: Date | null;
+
+  /** Bookings the trial allows; null (or absent) means "no limit" (spec 21). */
+  @Prop({ type: Number, default: null })
+  bookingQuota: number | null;
 }
 
 export const TenantSchema = SchemaFactory.createForClass(TenantRecord);

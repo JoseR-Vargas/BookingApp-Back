@@ -31,6 +31,17 @@ export class BlockAlreadyTaken extends DomainError {
   }
 }
 
+/** The message of a business whose free trial is over. */
+export const TRIAL_LIMIT_MESSAGE =
+  'Este negocio alcanzó el límite de su prueba.';
+
+/** The business reached the limit of its trial: it accepts no new bookings (spec 21). */
+export class TrialLimitReached extends DomainError {
+  constructor() {
+    super('forbidden', TRIAL_LIMIT_MESSAGE);
+  }
+}
+
 /** No booking matches: an unknown and a malformed cancel token answer alike. */
 export class BookingNotFound extends DomainError {
   constructor() {

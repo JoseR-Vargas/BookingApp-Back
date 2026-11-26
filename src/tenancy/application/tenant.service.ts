@@ -7,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK, Clock } from '../../shared/application/clock.port';
 import { Result, err, ok } from '../../shared/domain/result';
 import { Tenant } from '../domain/tenant';
+import { Trial } from '../domain/trial.rules';
 import {
   DuplicateTenantSlug,
   InvalidTenantName,
@@ -52,8 +53,16 @@ export class TenantService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  /** Creates a new, active business that is not the default one. */
-  async create(input: { slug: string; name: string }): Promise<Result<Tenant>> {
+  /**
+   * Creates a new, active business that is not the default one. Without
+   * `trial` it has no trial and no limit (what `tenant:create` makes); the
+   * self-service signup passes the trial of spec 21.
+   */
+  async create(input: {
+    slug: string;
+    name: string;
+    trial?: Trial;
+  }): Promise<Result<Tenant>> {
     const slug = normalizeSlug(input.slug);
     if (!isValidSlug(slug)) {
       return err(
@@ -82,6 +91,8 @@ export class TenantService {
       status: 'active',
       isDefault: false,
       createdAt: this.clock.now(),
+      trialEndsAt: input.trial?.trialEndsAt ?? null,
+      bookingQuota: input.trial?.bookingQuota ?? null,
     });
     return ok(saved);
   }

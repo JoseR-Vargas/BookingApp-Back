@@ -7,7 +7,8 @@ each repository, so a forgotten filter cannot leak data.
 ## Model
 
 - `tenants` collection: `slug` (unique), `name`, `status` (`active` or
-  `suspended`), `isDefault`, `createdAt`. It has no `tenantId`.
+  `suspended`), `isDefault`, `createdAt`, and the trial of spec 21
+  (`trialEndsAt`, `bookingQuota`; both `null` = no trial). It has no `tenantId`.
 - Scoped collections: `professionals`, `services`, `locations`,
   `business_settings`, `branding`, `bookings`, `admin_users`, `admin_sessions`
   (spec 20, see [admin-accounts.md](./admin-accounts.md)). Each declares
@@ -26,6 +27,9 @@ each repository, so a forgotten filter cannot leak data.
 
 ## Request flow
 
+0. `POST /api/signup` is the one exempt route (spec 21): it has no business until
+   it creates it, then runs the rest inside the new business's scope. See
+   [signup.md](./signup.md).
 1. `TenantMiddleware` reads the `X-Tenant` header. No header means the default
    business. Unknown or invalid slug: `404 Negocio no encontrado`. Suspended:
    `403 Este negocio no está disponible.`
@@ -52,6 +56,15 @@ npm run tenant:migrate                 # runs the migration
 settings. It has no professionals or services. It rejects invalid, reserved
 and duplicate slugs. The migration also runs at startup (before the seeders),
 is idempotent, and swaps the old unique indexes for the tenant-first ones.
+
+## Signup and trial (spec 21)
+
+A business can also be created by itself: `POST /api/signup` makes the business
+(`trialEndsAt` = +14 days, `bookingQuota` = 20), the same base as `tenant:create`, its
+first `owner` and the session. A business whose trial is over (time or quota) answers
+`403` to new bookings only. `tenant:create` keeps making businesses without a trial
+(`null`/`null`). The failure of a signup deletes the business and its scoped data
+(`TenantEraser`). Details in [signup.md](./signup.md).
 
 ## Backup and restore (Atlas free)
 

@@ -19,6 +19,10 @@ export interface Tenant {
   isDefault: boolean;
   /** When the business was created. */
   createdAt: Date;
+  /** When the free trial ends; null means "no trial" (spec 21). */
+  trialEndsAt: Date | null;
+  /** How many bookings the trial allows; null means "no limit" (spec 21). */
+  bookingQuota: number | null;
 }
 
 /** A business that does not exist yet. */
@@ -28,4 +32,6 @@ export interface NewTenant {
   status: TenantStatus;
   isDefault: boolean;
   createdAt: Date;
+  trialEndsAt: Date | null;
+  bookingQuota: number | null;
 }

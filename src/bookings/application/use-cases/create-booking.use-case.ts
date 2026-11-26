@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Result, err, ok } from '../../../shared/domain/result';
 import { BookingPlace, CreatedBooking } from '../../domain/booking';
-import { BlockAlreadyTaken, InvalidBooking } from '../../domain/booking.errors';
+import {
+  BlockAlreadyTaken,
+  InvalidBooking,
+  TrialLimitReached,
+} from '../../domain/booking.errors';
 import {
   BookingRequest,
   requireBookingFields,
@@ -15,6 +19,7 @@ import {
 import { BOOKING_READER, BookingReader } from '../ports/booking.reader';
 import { BOOKING_WRITER, BookingWriter } from '../ports/booking.writer';
 import { CANCEL_TOKENS, CancelTokens } from '../ports/cancel-tokens.port';
+import { TRIAL_GATE, TrialGate } from '../ports/trial-gate.port';
 import { resolveSchedule } from './resolve-schedule';
 
 export interface CreateBookingInput extends BookingRequest {
@@ -34,6 +39,7 @@ export interface CreateBookingInput extends BookingRequest {
 /**
  * Creates a confirmed booking. Everything but the client data is derived from
  * the catalog; the cancel token is returned once and only its hash is stored.
+ * A business whose free trial is over answers `TrialLimitReached` first.
  * Duplicates per client are NOT checked: a client may book with different
  * professionals at the same time.
  */
@@ -45,9 +51,14 @@ export class CreateBookingUseCase {
     @Inject(BOOKING_WRITER) private readonly writer: BookingWriter,
     @Inject(CANCEL_TOKENS) private readonly tokens: CancelTokens,
     @Inject(BOOKING_NOTIFIER) private readonly notifier: BookingNotifier,
+    @Inject(TRIAL_GATE) private readonly trial: TrialGate,
   ) {}
 
   async execute(input: CreateBookingInput): Promise<Result<CreatedBooking>> {
+    // A business whose trial is over takes no new bookings (spec 21).
+    if (!(await this.trial.allowsNewBookings())) {
+      return err(new TrialLimitReached());
+    }
     const required = requireBookingFields(input);
     if (!required.ok) return required;
 

@@ -52,7 +52,7 @@ answers `401`. The legacy key counts as owner.
 | Route | Who | Notes |
 | --- | --- | --- |
 | `POST /api/admin/session` | public | `{email, password}` -> `200 {ok, user}` + cookie |
-| `GET /api/admin/session` | any credential | key: `{ok: true}`; session: `{ok: true, user}` |
+| `GET /api/admin/session` | any credential | key: `{ok: true}`; session: `{ok: true, user, trial}` (`trial` is `null` without a free trial, spec 21) |
 | `DELETE /api/admin/session` | public | revokes the cookie's session, clears it, `{ok: true}` |
 | `GET /api/admin/users` | owner | list |
 | `POST /api/admin/users` | owner | `{email, name, password, role}` -> 201 |

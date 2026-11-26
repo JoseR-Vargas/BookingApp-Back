@@ -8,4 +8,6 @@ export const RESULT_MODULES: readonly string[] = [
   'catalog',
   'availability',
   'auth',
+  'signup',
+  'tenancy',
 ];

@@ -44,7 +44,19 @@ describe('TenantService.create', () => {
       status: 'active',
       isDefault: false,
       createdAt: clock.now(),
+      trialEndsAt: null,
+      bookingQuota: null,
     });
+  });
+
+  it('stores the trial it is given, and none by default', async () => {
+    const trialEndsAt = new Date('2026-12-09T10:00:00Z');
+    await service.create({
+      slug: 'con-prueba',
+      name: 'Con prueba',
+      trial: { trialEndsAt, bookingQuota: 20 },
+    });
+    expect(tenants.rows[0]).toMatchObject({ trialEndsAt, bookingQuota: 20 });
   });
 
   it('rejects an invalid slug', async () => {
