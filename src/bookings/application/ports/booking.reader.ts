@@ -7,6 +7,12 @@ import type { Booking } from '../../domain/booking';
  */
 export interface BookingReader {
   findAll(): Promise<Booking[]>;
+  /**
+   * The ids of the latest bookings, the newest first. It carries no data of
+   * the client: the panel asks for it to know whether a booking arrived (the
+   * live socket does not exist in a serverless deployment).
+   */
+  findRecentIds(limit: number): Promise<string[]>;
   findById(id: string): Promise<Booking | null>;
   /** The booking whose cancel token has this hash. */
   findByCancelTokenHash(hash: string): Promise<Booking | null>;

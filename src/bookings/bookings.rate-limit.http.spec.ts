@@ -22,6 +22,7 @@ describe('Bookings HTTP rate limit', () => {
         ...[
           bookings.create,
           bookings.list,
+          bookings.listRecentIds,
           bookings.get,
           bookings.update,
           bookings.remove,

@@ -123,6 +123,21 @@ export function describeBookingRepositoryContract(
         await expect(reader.findAll()).resolves.toEqual([]);
       });
 
+      it('answers the ids of the latest bookings, the newest first, and no data of the client', async () => {
+        const first = await store();
+        // Another slot, so the unique block of the professional does not refuse it.
+        const second = await store({ slots: ['14:00'], time: '14:00' });
+
+        const ids = await reader.findRecentIds(10);
+        expect(ids).toContain(first.id);
+        expect(ids).toContain(second.id);
+        expect(ids.length).toBeLessThanOrEqual(10);
+        // Only the ids: the panel polls them to know that a booking arrived.
+        ids.forEach((id) => expect(typeof id).toBe('string'));
+
+        await expect(reader.findRecentIds(1)).resolves.toHaveLength(1);
+      });
+
       it('defaults the notes to an empty text', async () => {
         const created = await store({ notes: undefined });
 

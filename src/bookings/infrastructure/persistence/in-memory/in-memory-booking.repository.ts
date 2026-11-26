@@ -77,6 +77,14 @@ export class InMemoryBookingRepository
     return Promise.resolve(this.all());
   }
 
+  findRecentIds(limit: number): Promise<string[]> {
+    return Promise.resolve(
+      this.all()
+        .slice(0, limit)
+        .map((booking) => booking.id),
+    );
+  }
+
   findById(id: string): Promise<Booking | null> {
     return Promise.resolve(this.get(id));
   }

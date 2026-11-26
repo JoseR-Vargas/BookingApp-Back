@@ -23,6 +23,7 @@ import { InMemoryBookingStatistics } from './infrastructure/persistence/in-memor
 import { CreateBookingUseCase } from './application/use-cases/create-booking.use-case';
 import { UpdateBookingUseCase } from './application/use-cases/update-booking.use-case';
 import { ListBookingsUseCase } from './application/use-cases/list-bookings.use-case';
+import { ListRecentBookingIdsUseCase } from './application/use-cases/list-recent-booking-ids.use-case';
 import { GetBookingUseCase } from './application/use-cases/get-booking.use-case';
 import { DeleteBookingUseCase } from './application/use-cases/delete-booking.use-case';
 import { GetCancellationUseCase } from './application/use-cases/get-cancellation.use-case';
@@ -238,6 +239,7 @@ export function buildBookings(
     ),
     update: new UpdateBookingUseCase(catalog, repository, repository),
     list: new ListBookingsUseCase(repository),
+    listRecentIds: new ListRecentBookingIdsUseCase(repository),
     get: new GetBookingUseCase(repository),
     remove: new DeleteBookingUseCase(repository),
     getCancellation: new GetCancellationUseCase(repository, tokens, clock),
