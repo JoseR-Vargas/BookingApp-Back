@@ -50,6 +50,18 @@ export class MongoBookingRepository
     return records.map(toDomain);
   }
 
+  async findRecentIds(limit: number): Promise<string[]> {
+    // Only the id and the creation date are read: the panel does not need the
+    // data of the client to know that a booking arrived.
+    const records = await this.model
+      .find({}, { projection: { _id: 1, createdAt: 1 } })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    return records.map((record) => String(record._id));
+  }
+
   async findById(id: string): Promise<Booking | null> {
     const record = await this.model.findById(id).exec();
     return record ? toDomain(record) : null;

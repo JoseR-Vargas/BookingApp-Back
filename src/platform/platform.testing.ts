@@ -18,6 +18,7 @@ import {
   PlatformUsage,
 } from './domain/platform-usage';
 import { PlatformUsageReader } from './application/ports/platform-usage.port';
+import { TenantEraser } from '../tenancy/application/ports/tenant-eraser.port';
 import {
   CachedMetrics,
   PlatformMetricsCache,
@@ -165,6 +166,18 @@ export class FakeAudit implements PlatformAudit {
   }
 }
 
+/** The eraser of a business, in memory: it takes the business off the list. */
+export class FakeEraser implements TenantEraser {
+  calls: { tenantId: string }[] = [];
+  constructor(private readonly tenants: FakeTenants) {}
+
+  erase(tenantId: string): Promise<void> {
+    this.calls.push({ tenantId });
+    this.tenants.rows = this.tenants.rows.filter((row) => row.id !== tenantId);
+    return Promise.resolve();
+  }
+}
+
 /** The manual changes of the plan, in memory. */
 export class FakeSubscriptionAdmin implements SubscriptionAdministrator {
   calls: { tenantId: string; planId: PlanId }[] = [];
@@ -223,6 +236,7 @@ export function buildPlatform(options: { now?: Date } = {}) {
   const audit = new FakeAudit();
   const admin = new FakeSubscriptionAdmin(subscriptions);
   const metricsCache = new FakeMetricsCache();
+  const eraser = new FakeEraser(tenants);
   return {
     now,
     clock,
@@ -234,5 +248,6 @@ export function buildPlatform(options: { now?: Date } = {}) {
     audit,
     admin,
     metricsCache,
+    eraser,
   };
 }

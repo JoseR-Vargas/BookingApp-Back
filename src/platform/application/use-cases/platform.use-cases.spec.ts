@@ -1,5 +1,6 @@
 import { PlatformBusinessReader } from '../platform-business-reader';
 import { ChangePlanUseCase } from './change-plan.use-case';
+import { DeleteBusinessUseCase } from './delete-business.use-case';
 import { ExtendTrialUseCase } from './extend-trial.use-case';
 import { GetBusinessDetailUseCase } from './get-business-detail.use-case';
 import { GetPlatformMetricsUseCase } from './get-platform-metrics.use-case';
@@ -38,6 +39,12 @@ describe('the use cases of the owner panel (spec 25)', () => {
       suspend: new SuspendBusinessUseCase(
         reader,
         fakes.lifecycle,
+        fakes.tenantCache,
+        fakes.audit,
+      ),
+      remove: new DeleteBusinessUseCase(
+        reader,
+        fakes.eraser,
         fakes.tenantCache,
         fakes.audit,
       ),
@@ -93,6 +100,7 @@ describe('the use cases of the owner panel (spec 25)', () => {
         {
           id: 'id-sur',
           slug: 'sur',
+          isDefault: false,
           name: 'Barbería Sur',
           status: 'active',
           plan: { id: 'pro', name: 'Pro' },
@@ -105,6 +113,7 @@ describe('the use cases of the owner panel (spec 25)', () => {
         {
           id: 'id-norte',
           slug: 'norte',
+          isDefault: false,
           name: 'Norte',
           status: 'suspended',
           plan: null,
@@ -394,6 +403,87 @@ describe('the use cases of the owner panel (spec 25)', () => {
       expect(result.error.message).toBe('El plan elegido no existe.');
       expect(fakes.admin.calls).toEqual([]);
       expect(fakes.audit.entries).toEqual([]);
+    });
+  });
+
+  describe('deleting a business', () => {
+    it('refuses to delete the business that answers when the request names none', async () => {
+      const { fakes, remove } = build();
+      fakes.tenants.rows = [
+        aTenant({ id: 'id-main', slug: 'principal', isDefault: true }),
+        aTenant({ id: 'id-norte', slug: 'norte' }),
+      ];
+
+      const result = await remove.execute('id-main', 'principal');
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toBe(
+        'No se puede eliminar el negocio principal del sistema.',
+      );
+      expect(fakes.eraser.calls).toEqual([]);
+    });
+
+    it('refuses to delete the only business that answers', async () => {
+      const { fakes, remove } = build();
+      fakes.tenants.rows = [aTenant()];
+
+      const result = await remove.execute('id-sur', 'sur');
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toBe(
+        'No se puede eliminar el único negocio activo del sistema.',
+      );
+      expect(fakes.eraser.calls).toEqual([]);
+    });
+
+    it('refuses a confirmation that is not the slug of the business', async () => {
+      const { fakes, remove } = build();
+      fakes.tenants.rows = [
+        aTenant(),
+        aTenant({ id: 'id-norte', slug: 'norte' }),
+      ];
+
+      const result = await remove.execute('id-norte', 'otra-cosa');
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain('Confirmá la eliminación');
+      expect(fakes.eraser.calls).toEqual([]);
+    });
+
+    it('deletes it, with everything of it, and leaves a trace', async () => {
+      const { fakes, remove } = build();
+      fakes.tenants.rows = [
+        aTenant(),
+        aTenant({ id: 'id-norte', slug: 'norte' }),
+      ];
+
+      const result = await remove.execute('id-norte', 'norte');
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toEqual({
+        id: 'id-norte',
+        slug: 'norte',
+        // The name of the fake business is the same: only the slug and the id change.
+        name: 'Barbería Sur',
+      });
+      expect(fakes.eraser.calls).toEqual([{ tenantId: 'id-norte' }]);
+      expect(fakes.tenants.rows.map((row) => row.id)).toEqual(['id-sur']);
+      expect(fakes.audit.entries[0].action).toBe('delete');
+    });
+
+    it('does not find a business that does not exist', async () => {
+      const { fakes, remove } = build();
+      fakes.tenants.rows = [aTenant()];
+
+      const result = await remove.execute('id-que-no-existe', 'x');
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toBe('Negocio no encontrado.');
     });
   });
 });

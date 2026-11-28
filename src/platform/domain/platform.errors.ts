@@ -15,12 +15,36 @@ export class PlatformBusinessNotFound extends DomainError {
   }
 }
 
+/** The business that answers when the request names none cannot be deleted. */
+export class DefaultBusinessCannotBeDeleted extends DomainError {
+  constructor() {
+    super('conflict', 'No se puede eliminar el negocio principal del sistema.');
+  }
+}
+
+/** The confirmation of the deletion does not match the business. */
+export class DeleteConfirmationMismatch extends DomainError {
+  constructor(slug: string) {
+    super('validation', `Confirmá la eliminación escribiendo "${slug}".`);
+  }
+}
+
 /** The installation cannot lose its last business that answers. */
 export class LastBusinessCannotBeSuspended extends DomainError {
   constructor() {
     super(
       'conflict',
       'No se puede suspender el único negocio activo del sistema.',
+    );
+  }
+}
+
+/** The installation cannot lose its last business that answers. */
+export class LastBusinessCannotBeDeleted extends DomainError {
+  constructor() {
+    super(
+      'conflict',
+      'No se puede eliminar el único negocio activo del sistema.',
     );
   }
 }

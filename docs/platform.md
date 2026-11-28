@@ -152,6 +152,24 @@ new one.
 - `409` `Este negocio ya está en el plan Pro.` (there is no change to record).
 - `404` `Negocio no encontrado.`
 
+### `DELETE /api/platform/tenants/:id`
+
+Deletes the business and **everything of it**: its bookings (with the data of its clients), its
+catalog, its settings, its branding, its users and sessions, and its subscription. The events of the
+payments are **not** deleted: they are the audit trail of the installation.
+
+Body: `{ "confirm": "<slug>" }`. The confirmation is obligatory: if it is not the slug of the
+business, the answer is `400` with `Confirmá la eliminación escribiendo "<slug>".`. It is so a slip of
+the mouse does not erase a year of bookings.
+
+Never deleted:
+
+- **the main business** (the one that answers when the request names none): without it the
+  installation has no default and every request fails.
+- **the only business that answers**: the installation must keep at least one.
+
+The panel asks for the address of the business before deleting it.
+
 ### `GET /api/platform/metrics`
 
 The metrics of the installation.

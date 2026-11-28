@@ -206,3 +206,16 @@ routes), `AvailabilityCache` (+ `AvailabilityInvalidator`, applied to the writer
 ports by `invalidatingWriter` in the module files), `TenantStorageMeter` /
 `TenantStorageStore` / `StorageGate` (storage quota). `src/scripts/db-backup.ts`
 wraps `mongodump` / `mongorestore`. See `docs/atlas-limits.md`.
+
+## Live updates of the panel (spec 26)
+
+In a serverless deployment (Vercel) there is no live socket: the function cannot hold a connection
+open and the state of the socket server lives in the memory of one process. The panel therefore
+**polls**: `GET /api/bookings/ids` answers the ids of the latest bookings (nothing else, no data of
+the client) and the front asks every 5 seconds while the tab is visible.
+
+- The endpoint is behind the admin guard and is a read for every role.
+- The front marks the bookings it already knows, so a booking is never announced twice (the socket,
+  when it works, marks them too).
+- When the backend moves to a host with a long-running process, the socket comes back and both paths
+  keep working.

@@ -5,6 +5,7 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
   Param,
   Post,
@@ -12,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { respond } from '../../../shared/infrastructure/http/respond';
 import { ChangePlanUseCase } from '../../application/use-cases/change-plan.use-case';
+import { DeleteBusinessUseCase } from '../../application/use-cases/delete-business.use-case';
 import { ExtendTrialUseCase } from '../../application/use-cases/extend-trial.use-case';
 import { ReactivateBusinessUseCase } from '../../application/use-cases/reactivate-business.use-case';
 import { SuspendBusinessUseCase } from '../../application/use-cases/suspend-business.use-case';
@@ -26,6 +28,7 @@ export class PlatformTenantActionsController {
     private readonly reactivate: ReactivateBusinessUseCase,
     private readonly extendTrial: ExtendTrialUseCase,
     private readonly changePlan: ChangePlanUseCase,
+    private readonly deleteBusiness: DeleteBusinessUseCase,
   ) {}
 
   /** Suspends the business: its own routes answer 403 and nothing is deleted. */
@@ -75,6 +78,23 @@ export class PlatformTenantActionsController {
       business: toBusinessJson(
         respond(await this.changePlan.execute(id, body?.planId)),
       ),
+    };
+  }
+
+  /**
+   * Deletes the business and everything of it: its bookings, the data of its
+   * clients, its catalog, its users and its subscription. The body must carry
+   * the slug of the business, so a slip of the mouse does not erase a year of
+   * bookings.
+   */
+  @Delete(':id')
+  @HttpCode(200)
+  async deleteBusinessOfBusiness(
+    @Param('id') id: string,
+    @Body() body: { confirm?: unknown } | undefined,
+  ): Promise<{ deleted: { id: string; slug: string; name: string } }> {
+    return {
+      deleted: respond(await this.deleteBusiness.execute(id, body?.confirm)),
     };
   }
 }

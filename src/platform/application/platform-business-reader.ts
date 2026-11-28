@@ -45,6 +45,7 @@ export class PlatformBusinessReader {
         {
           id: tenant.id,
           slug: tenant.slug,
+          isDefault: tenant.isDefault,
           name: tenant.name,
           status: tenant.status,
           trialEndsAt: tenant.trialEndsAt,

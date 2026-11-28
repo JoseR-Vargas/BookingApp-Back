@@ -71,6 +71,8 @@ describe('roles of the admin routes', () => {
       'GET getStatistics': ALL,
       'GET findAll': ALL,
       'GET findOne': ALL,
+      // The ids of the latest bookings (the poll of the panel): a read.
+      'GET findRecentIds': ALL,
       'PATCH update': 'staff+owner',
       'DELETE remove': 'staff+owner',
     });

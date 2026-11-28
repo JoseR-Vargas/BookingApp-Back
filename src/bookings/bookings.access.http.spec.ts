@@ -22,6 +22,10 @@ describe('Bookings HTTP access control', () => {
       providers: [
         { provide: bookings.create.constructor, useValue: bookings.create },
         { provide: bookings.list.constructor, useValue: bookings.list },
+        {
+          provide: bookings.listRecentIds.constructor,
+          useValue: bookings.listRecentIds,
+        },
         { provide: bookings.get.constructor, useValue: bookings.get },
         { provide: bookings.update.constructor, useValue: bookings.update },
         { provide: bookings.remove.constructor, useValue: bookings.remove },
