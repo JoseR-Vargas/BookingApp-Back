@@ -10,7 +10,10 @@ import {
   BusinessAlreadyOnPlan,
   BusinessAlreadySuspended,
   BusinessHasNoTrial,
+  DefaultBusinessCannotBeDeleted,
+  DeleteConfirmationMismatch,
   InvalidTrialDays,
+  LastBusinessCannotBeDeleted,
   LastBusinessCannotBeSuspended,
   TrialAlreadyExpired,
   UnknownPlan,
@@ -24,6 +27,10 @@ export const MAX_TRIAL_EXTENSION_DAYS = 365;
 export interface PanelBusiness {
   /** The id of the business (the `_id` of its document). */
   id: string;
+  /** The unique name of the business in a URL. */
+  slug: string;
+  /** Whether the business is the one that answers when the request names none. */
+  isDefault: boolean;
   /** Whether the business answers requests. */
   status: 'active' | 'suspended';
   /** When its trial ends; null when it has no trial (spec 21). */
@@ -140,4 +147,29 @@ export function canChangePlan(
     return err(new BusinessAlreadyOnPlan(planId));
   }
   return ok(planId);
+}
+
+/**
+ * Deleting a business (the owner of the system asked for the real deletion):
+ * the business that answers when the request names none cannot go (the
+ * installation would have no default), the last business that answers cannot go
+ * either, and the deletion must be confirmed with the slug of the business, so
+ * a slip of the mouse does not erase a year of bookings.
+ */
+export function canDeleteBusiness(
+  business: Pick<PanelBusiness, 'slug' | 'isDefault'>,
+  activeBusinesses: number,
+  confirmation: unknown,
+): Result<true> {
+  if (business.isDefault) {
+    return err(new DefaultBusinessCannotBeDeleted());
+  }
+  if (activeBusinesses <= 1) {
+    return err(new LastBusinessCannotBeDeleted());
+  }
+  const written = typeof confirmation === 'string' ? confirmation.trim() : '';
+  if (written.toLowerCase() !== business.slug.toLowerCase()) {
+    return err(new DeleteConfirmationMismatch(business.slug));
+  }
+  return ok(true);
 }

@@ -39,6 +39,8 @@ export interface PlatformBusiness {
   id: string;
   /** The unique name of the business in a URL. */
   slug: string;
+  /** Whether it is the business that answers when the request names none. */
+  isDefault: boolean;
   /** The name the business shows. */
   name: string;
   /** Whether the business answers requests. */
@@ -68,6 +70,8 @@ export interface BusinessSignals {
   id: string;
   slug: string;
   name: string;
+  /** Whether it is the business that answers when the request names none. */
+  isDefault: boolean;
   status: 'active' | 'suspended';
   /** When the trial ends; null when the business has no trial. */
   trialEndsAt: Date | null;
@@ -94,6 +98,7 @@ export function toPlatformBusiness(
   return {
     id: signals.id,
     slug: signals.slug,
+    isDefault: signals.isDefault,
     name: signals.name,
     status: signals.status,
     plan: signals.planId

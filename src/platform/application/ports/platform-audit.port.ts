@@ -8,7 +8,8 @@ export type PlatformAction =
   | 'suspend'
   | 'reactivate'
   | 'extend-trial'
-  | 'change-plan';
+  | 'change-plan'
+  | 'delete';
 
 /** One manual action, with what it changed. */
 export interface PlatformAuditEntry {

@@ -32,6 +32,10 @@ export class LoggingPlatformAudit implements PlatformAudit {
         return `Cambio manual de plan del negocio ${entry.businessId}: de ${
           entry.from ?? 'ninguno'
         } a ${entry.to ?? 'ninguno'}.`;
+      case 'delete':
+        return `Negocio ${entry.businessId} eliminado por el dueño del sistema. ${
+          entry.detail ?? ''
+        }`.trim();
     }
   }
 }

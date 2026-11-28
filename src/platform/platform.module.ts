@@ -18,6 +18,7 @@ import { PLATFORM_METRICS_CACHE } from './application/ports/platform-metrics-cac
 import { PLATFORM_USAGE_READER } from './application/ports/platform-usage.port';
 import { PlatformBusinessReader } from './application/platform-business-reader';
 import { ChangePlanUseCase } from './application/use-cases/change-plan.use-case';
+import { DeleteBusinessUseCase } from './application/use-cases/delete-business.use-case';
 import { ExtendTrialUseCase } from './application/use-cases/extend-trial.use-case';
 import { GetBusinessDetailUseCase } from './application/use-cases/get-business-detail.use-case';
 import { GetPlatformMetricsUseCase } from './application/use-cases/get-platform-metrics.use-case';
@@ -82,6 +83,7 @@ export function platformMetricsCacheTtlMs(
     ReactivateBusinessUseCase,
     ExtendTrialUseCase,
     ChangePlanUseCase,
+    DeleteBusinessUseCase,
   ],
   exports: [PlatformBusinessReader],
 })

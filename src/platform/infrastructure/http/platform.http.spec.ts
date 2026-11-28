@@ -9,6 +9,7 @@ import { configureApp } from '../../../main';
 import { PlatformBusinessReader } from '../../application/platform-business-reader';
 import { PLATFORM_CREDENTIALS } from '../../application/ports/platform-credentials.port';
 import { ChangePlanUseCase } from '../../application/use-cases/change-plan.use-case';
+import { DeleteBusinessUseCase } from '../../application/use-cases/delete-business.use-case';
 import { ExtendTrialUseCase } from '../../application/use-cases/extend-trial.use-case';
 import { GetBusinessDetailUseCase } from '../../application/use-cases/get-business-detail.use-case';
 import { GetPlatformMetricsUseCase } from '../../application/use-cases/get-platform-metrics.use-case';
@@ -134,6 +135,15 @@ describe('the platform API (spec 25)', () => {
             fakes.admin,
             fakes.audit,
             fakes.clock,
+          ),
+        },
+        {
+          provide: DeleteBusinessUseCase,
+          useValue: new DeleteBusinessUseCase(
+            reader,
+            fakes.eraser,
+            fakes.tenantCache,
+            fakes.audit,
           ),
         },
       ],
@@ -356,6 +366,62 @@ describe('the platform API (spec 25)', () => {
       expect(
         (res.body as { business: { status: string } }).business.status,
       ).toBe('active');
+    });
+
+    it('deletes a business when the slug is confirmed', async () => {
+      fakes.tenants.rows = [
+        aTenant({ id: 'id-sur', slug: 'sur' }),
+        aTenant({ id: 'id-norte', slug: 'norte' }),
+      ];
+
+      const res = await asOwner(
+        http()
+          .delete('/api/platform/tenants/id-norte')
+          .send({ confirm: 'norte' }),
+      );
+
+      expect(res.status).toBe(200);
+      expect((res.body as { deleted: { slug: string } }).deleted.slug).toBe(
+        'norte',
+      );
+      expect(fakes.eraser.calls).toEqual([{ tenantId: 'id-norte' }]);
+    });
+
+    it('refuses a deletion without the confirmation of the slug', async () => {
+      fakes.tenants.rows = [
+        aTenant({ id: 'id-sur', slug: 'sur' }),
+        aTenant({ id: 'id-norte', slug: 'norte' }),
+      ];
+
+      const res = await asOwner(
+        http()
+          .delete('/api/platform/tenants/id-norte')
+          .send({ confirm: 'sur' }),
+      );
+
+      expect(res.status).toBe(400);
+      expect((res.body as { message: string }).message).toContain(
+        'Confirmá la eliminación',
+      );
+      expect(fakes.eraser.calls).toEqual([]);
+    });
+
+    it('refuses to delete the business that answers when the request names none', async () => {
+      fakes.tenants.rows = [
+        aTenant({ id: 'id-main', slug: 'principal', isDefault: true }),
+        aTenant({ id: 'id-norte', slug: 'norte' }),
+      ];
+
+      const res = await asOwner(
+        http()
+          .delete('/api/platform/tenants/id-main')
+          .send({ confirm: 'principal' }),
+      );
+
+      expect(res.status).toBe(409);
+      expect((res.body as { message: string }).message).toBe(
+        'No se puede eliminar el negocio principal del sistema.',
+      );
     });
 
     it('extends the trial of a business', async () => {
